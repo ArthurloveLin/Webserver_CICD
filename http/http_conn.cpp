@@ -490,8 +490,9 @@ http_conn::HTTP_CODE http_conn::do_request()
     }
     else if (*(p + 1) == '7')
     {
+        // 原fans.html已改为弹出窗口，重定向到welcome页面
         char *m_url_real = (char *)malloc(sizeof(char) * 200);
-        strcpy(m_url_real, "/fans.html");
+        strcpy(m_url_real, "/welcome.html");
         strncpy(m_real_file + len, m_url_real, strlen(m_url_real));
 
         free(m_url_real);
@@ -612,7 +613,35 @@ bool http_conn::add_content_length(int content_len)
 }
 bool http_conn::add_content_type()
 {
-    return add_response("Content-Type:%s\r\n", "text/html");
+    // 根据文件扩展名设置正确的Content-Type
+    const char* ext = strrchr(m_real_file, '.');
+    const char* content_type = "text/html";
+    
+    if (ext) {
+        if (strcmp(ext, ".pdf") == 0) {
+            content_type = "application/pdf";
+        }
+        else if (strcmp(ext, ".jpg") == 0 || strcmp(ext, ".jpeg") == 0) {
+            content_type = "image/jpeg";
+        }
+        else if (strcmp(ext, ".png") == 0) {
+            content_type = "image/png";
+        }
+        else if (strcmp(ext, ".gif") == 0) {
+            content_type = "image/gif";
+        }
+        else if (strcmp(ext, ".css") == 0) {
+            content_type = "text/css";
+        }
+        else if (strcmp(ext, ".js") == 0) {
+            content_type = "application/javascript";
+        }
+        else if (strcmp(ext, ".mp4") == 0) {
+            content_type = "video/mp4";
+        }
+    }
+    
+    return add_response("Content-Type:%s\r\n", content_type);
 }
 bool http_conn::add_linger()
 {
@@ -659,6 +688,7 @@ bool http_conn::process_write(HTTP_CODE ret)
         add_status_line(200, ok_200_title);
         if (m_file_stat.st_size != 0)
         {
+            add_content_type();
             add_headers(m_file_stat.st_size);
             m_iv[0].iov_base = m_write_buf;
             m_iv[0].iov_len = m_write_idx;

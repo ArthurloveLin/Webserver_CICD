@@ -1,15 +1,582 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>awsl</title>
-    </head>
-    <body><br/>
-<br/>
-<div align="center"><font size="5"> <strong>你居然想看图，不想关注我</strong></font></div>
-<br/>
-<!--<div  align="center">a w s l</div>-->
-<br/>
-<br/>
-<div align="center"><img src="./xxx.jpg" title="awsl"/></div>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人简历 - WebServer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .resume-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 900px;
+            text-align: center;
+        }
+
+        .resume-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 30px;
+        }
+
+        .resume-icon {
+            width: 18px;
+            height: 18px;
+            margin-right: 8px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>');
+            background-size: contain;
+        }
+
+        .main-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 18px;
+            font-weight: 500;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .playful-text {
+            background: linear-gradient(135deg, #9f7aea, #805ad5);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: 700;
+        }
+
+        .pdf-showcase {
+            margin: 40px 0;
+            position: relative;
+        }
+
+        .pdf-frame {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+            border: 4px solid rgba(255, 255, 255, 0.9);
+            position: relative;
+            background: linear-gradient(45deg, #4299e1 0%, #3182ce 100%);
+            padding: 8px;
+            width: 100%;
+            height: 600px;
+        }
+
+        .pdf-viewer {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 16px;
+            transition: all 0.4s ease;
+            display: block;
+        }
+
+        .pdf-viewer:hover {
+            transform: scale(1.01);
+        }
+
+        .pdf-canvas {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .pdf-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 12px;
+        }
+
+        .pdf-btn {
+            background: #4299e1;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s ease;
+        }
+
+        .pdf-btn:hover {
+            background: #3182ce;
+        }
+
+        .pdf-btn:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        .pdf-page-info {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .loading-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: #4a5568;
+            font-size: 16px;
+        }
+
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #e2e8f0;
+            border-top: 2px solid #4299e1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .pdf-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            background: #f8fafc;
+            border-radius: 16px;
+            color: #4a5568;
+        }
+
+        .pdf-fallback-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 16px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>');
+            background-size: contain;
+        }
+
+        .download-link {
+            color: #4299e1;
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid #4299e1;
+            padding: 12px 24px;
+            border-radius: 8px;
+            margin-top: 16px;
+            transition: all 0.3s ease;
+        }
+
+        /* 新增PNG预览样式 */
+        .resume-showcase {
+            margin: 30px 0;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 4px;
+        }
+
+        .resume-frame {
+            border-radius: 16px;
+            background: white;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .resume-preview-container {
+            position: relative;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .resume-preview-container:hover {
+            transform: scale(1.02);
+        }
+
+        .resume-preview-image {
+            width: 100%;
+            height: auto;
+            max-width: 800px;
+            display: block;
+            margin: 0 auto;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .resume-preview-image:hover {
+            filter: brightness(1.05);
+        }
+
+        .click-hint {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .resume-preview-container:hover .click-hint {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        .download-icon-overlay {
+            font-size: 16px;
+            animation: bounce 2s infinite;
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {
+                transform: translateY(0);
+            }
+            40% {
+                transform: translateY(-5px);
+            }
+            60% {
+                transform: translateY(-3px);
+            }
+        }
+
+        .download-link:hover {
+            background: #4299e1;
+            color: white;
+        }
+
+        .fun-section {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            border-radius: 16px;
+            padding: 30px;
+            margin-top: 40px;
+            border-left: 4px solid #9f7aea;
+        }
+
+        .fun-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 12px;
+        }
+
+        .fun-description {
+            color: #4a5568;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .action-button {
+            display: inline-flex;
+            align-items: center;
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+
+        .follow-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .follow-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .share-button {
+            background: linear-gradient(135deg, #fd79a8, #e84393);
+            color: white;
+        }
+
+        .share-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(232, 67, 147, 0.3);
+        }
+
+        .button-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            background-size: contain;
+        }
+
+        .download-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" /></svg>');
+        }
+
+        .print-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>');
+        }
+
+        .back-link {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .back-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .back-link a:hover {
+            color: #5a67d8;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .resume-container {
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-10px);
+            }
+        }
+
+        .resume-badge {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @media (max-width: 480px) {
+            .resume-container {
+                margin: 20px;
+                padding: 40px 25px;
+            }
+            
+            .pdf-frame {
+                height: 500px;
+            }
+            
+            .main-title {
+                font-size: 24px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+            }
+
+            .fun-section {
+                padding: 25px 20px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .action-button {
+                width: 200px;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="resume-container">
+        <div class="resume-badge">
+            <span class="resume-icon"></span>
+            个人简历
+        </div>
+        
+        <h1 class="main-title">欢迎查看我的简历！</h1>
+        <p class="subtitle">
+            这里是我的<span class="playful-text">个人简历</span>，<br/>
+            希望能够为您提供有用的信息！📄
+        </p>
+        
+        <div class="resume-showcase">
+            <div class="resume-frame">
+                <div class="resume-preview-container">
+                    <img id="resume-preview" 
+                         src="./resume-1.png" 
+                         alt="个人简历预览图" 
+                         class="resume-preview-image"
+                         onclick="downloadPDF()">
+                    <div class="click-hint">
+                        <span class="click-text">点击图片下载PDF简历</span>
+                        <div class="download-icon-overlay">📥</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="fun-section">
+            <h3 class="fun-title">📝 关于这份简历</h3>
+            <p class="fun-description">
+                这是我的个人简历，包含了我的教育背景、工作经历和技能介绍。如果您需要更多信息，请随时联系我！
+            </p>
+            <div class="action-buttons">
+                <a href="./resume.pdf" download class="action-button follow-button">
+                    <span class="button-icon download-icon"></span>
+                    下载简历
+                </a>
+                <button class="action-button share-button" onclick="window.print()">
+                    <span class="button-icon print-icon"></span>
+                    打印页面
+                </button>
+            </div>
+        </div>
+        
+        <div class="back-link">
+            <a href="javascript:history.back()">← 返回上一页</a>
+        </div>
+    </div>
+<script>
+// PDF下载功能
+function downloadPDF() {
+    // 创建一个隐藏的链接来触发下载
+    const link = document.createElement('a');
+    link.href = './resume.pdf';
+    link.download = 'resume.pdf';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // 显示下载提示
+    showDownloadNotification();
+}
+
+function showDownloadNotification() {
+    const notification = document.createElement('div');
+    notification.innerHTML = '简历PDF下载已开始... 📥';
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #4CAF50;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 1000;
+        font-family: 'Microsoft YaHei', sans-serif;
+        font-size: 14px;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.3s ease;
+    `;
+    document.body.appendChild(notification);
+    
+    // 显示动画
+    setTimeout(() => {
+        notification.style.opacity = '1';
+        notification.style.transform = 'translateX(0)';
+    }, 100);
+    
+    // 3秒后移除
+    setTimeout(() => {
+        notification.style.opacity = '0';
+        notification.style.transform = 'translateX(100%)';
+        setTimeout(() => {
+            if (document.body.contains(notification)) {
+                document.body.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// 页面加载完成后的初始化
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('页面加载完成，PNG预览方案已就绪');
+    
+    // 检查PNG图片是否存在
+    const img = document.getElementById('resume-preview');
+    if (img) {
+        img.onerror = function() {
+            console.error('PNG预览图片加载失败');
+            // 如果PNG加载失败，显示备用内容
+            this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjUwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjBmMGYwIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxOCIgZmlsbD0iIzk5OTk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPueugOS4quS6uueugOS9k+mihuiniOWbvue3hyDwn5OSPC90ZXh0Pjwvc3ZnPg==';
+            this.alt = '简历预览图加载失败';
+        };
+        
+        img.onload = function() {
+            console.log('PNG预览图片加载成功');
+        };
+    }
+});
+</script>
+</body>
 </html>

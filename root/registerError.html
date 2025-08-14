@@ -1,22 +1,333 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>Sign up</title>
-    </head>
-    <body>
-<br/>
-<br/>
-    <div align="center"><font size="5"> <strong>注册</strong></font></div>
-    <br/>
-        <div class="login">
-                <form action="3CGISQL.cgi" method="post">
-                        <div align="center"><input type="text" name="user" placeholder="用户名" required="required"></div><br/>
-                        <div align="center"><input type="password" name="password" placeholder="用户密码" required="required"></div><br/>
-                        <div align="center"><button type="submit">注册</button></div>
-                </form>
-		<div  align="center">提示：该用户名被注册.</div>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册失败 - WebServer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .register-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+        }
+
+        .error-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #ed8936, #dd6b20);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .error-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 6px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>');
+            background-size: contain;
+        }
+
+        .register-header {
+            margin-bottom: 40px;
+        }
+
+        .register-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .register-subtitle {
+            color: #718096;
+            font-size: 16px;
+            font-weight: 400;
+        }
+
+        .error-message {
+            background: #ffeaa7;
+            border: 1px solid #fdcb6e;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 24px;
+            color: #8b5cf6;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+            text-align: left;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #4a5568;
+            font-size: 14px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px 20px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 16px;
+            color: #2d3748;
+            background: #ffffff;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .form-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .form-input.error {
+            border-color: #ed8936;
+        }
+
+        .form-input.error:focus {
+            border-color: #ed8936;
+            box-shadow: 0 0 0 3px rgba(237, 137, 54, 0.1);
+        }
+
+        .form-input::placeholder {
+            color: #a0aec0;
+            font-weight: 400;
+        }
+
+        .register-button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+            letter-spacing: 0.5px;
+        }
+
+        .register-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.3);
+        }
+
+        .register-button:active {
+            transform: translateY(0);
+        }
+
+        .form-footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .back-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover {
+            color: #5a67d8;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .register-container {
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @media (max-width: 480px) {
+            .register-container {
+                margin: 20px;
+                padding: 40px 30px;
+            }
+            
+            .register-title {
+                font-size: 28px;
+            }
+        }
+
+        .input-icon {
+            position: relative;
+        }
+
+        .input-icon::before {
+            content: '';
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 16px;
+            height: 16px;
+            background-size: contain;
+            opacity: 0.5;
+            z-index: 1;
+        }
+
+        .user-input::before {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>');
+        }
+
+        .password-input::before {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>');
+        }
+
+        .user-input .form-input,
+        .password-input .form-input {
+            padding-left: 48px;
+        }
+
+        .security-tips {
+            background: #f7fafc;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: #4a5568;
+            text-align: left;
+        }
+
+        .security-tips ul {
+            margin: 8px 0 0 16px;
+        }
+
+        .security-tips li {
+            margin-bottom: 4px;
+        }
+
+        .suggestions {
+            background: #e6fffa;
+            border: 1px solid #81e6d9;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #234e52;
+        }
+
+        .suggestions strong {
+            color: #1a202c;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-header">
+            <div class="error-badge">
+                <span class="error-icon"></span>
+                注册失败
+            </div>
+            <h1 class="register-title">重新注册</h1>
+            <p class="register-subtitle">请选择一个不同的用户名</p>
         </div>
-    </body>
+        
+        <div class="error-message">
+            ⚠️ 该用户名已被注册，请选择其他用户名
+        </div>
+        
+        <form action="3CGISQL.cgi" method="post">
+            <div class="form-group">
+                <label class="form-label" for="user">用户名</label>
+                <div class="input-icon user-input">
+                    <input 
+                        type="text" 
+                        id="user"
+                        name="user" 
+                        class="form-input error"
+                        placeholder="请输入新的用户名" 
+                        required 
+                        autocomplete="username"
+                        minlength="3"
+                        maxlength="20"
+                    >
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label" for="password">密码</label>
+                <div class="input-icon password-input">
+                    <input 
+                        type="password" 
+                        id="password"
+                        name="password" 
+                        class="form-input"
+                        placeholder="请输入密码" 
+                        required
+                        autocomplete="new-password"
+                        minlength="6"
+                    >
+                </div>
+                <div class="security-tips">
+                    <strong>密码要求：</strong>
+                    <ul>
+                        <li>至少6个字符</li>
+                        <li>建议包含字母和数字</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="suggestions">
+                <strong>提示：</strong> 试试在用户名后面加上数字，或者使用下划线连接词语
+            </div>
+            
+            <button type="submit" class="register-button">
+                重新注册
+            </button>
+        </form>
+        
+        <div class="form-footer">
+            <a href="javascript:history.back()" class="back-link">← 返回上一页</a>
+        </div>
+    </div>
+</body>
 </html>
 

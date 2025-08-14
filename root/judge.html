@@ -1,26 +1,288 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>WebServer</title>
-    </head>
-    <body>
-    <br/>
-    <br/>
-    <div align="center"><font size="5"> <strong>欢迎访问</strong></font></div>
-	<br/>
-		<br/>
-		<form action="0" method="post">
- 			<div align="center"><button type="submit">新用户</button></div>
-                </form>
-		<br/>
-                <form action="1" method="post">
-                        <div align="center"><button type="submit" >已有账号</button></div>
-                </form>
-		
-		
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebServer - 欢迎访问</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .welcome-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 60px 50px;
+            width: 100%;
+            max-width: 480px;
+            text-align: center;
+        }
+
+        .welcome-header {
+            margin-bottom: 50px;
+        }
+
+        .welcome-title {
+            font-size: 36px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 16px;
+            letter-spacing: -0.5px;
+        }
+
+        .welcome-subtitle {
+            color: #718096;
+            font-size: 18px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+
+        .button-group {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .action-button {
+            width: 100%;
+            padding: 20px 30px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.5px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .register-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .register-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.3);
+        }
+
+        .login-button {
+            background: transparent;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .login-button:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.2);
+        }
+
+        .action-button:active {
+            transform: translateY(0);
+        }
+
+        .icon {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .register-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>');
+            background-size: contain;
+        }
+
+        .login-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="%23667eea"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>');
+            background-size: contain;
+        }
+
+        .login-button:hover .login-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" /></svg>');
+        }
+
+        .divider {
+            margin: 30px 0;
+            text-align: center;
+            position: relative;
+        }
+
+        .divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #e2e8f0;
+        }
+
+        .divider span {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 0 20px;
+            color: #718096;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .welcome-container {
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @media (max-width: 480px) {
+            .welcome-container {
+                margin: 20px;
+                padding: 50px 35px;
+            }
+            
+            .welcome-title {
+                font-size: 30px;
+            }
+
+            .welcome-subtitle {
+                font-size: 16px;
+            }
+
+            .action-button {
+                padding: 18px 24px;
+                font-size: 15px;
+            }
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .feature-item {
+            text-align: center;
+            padding: 20px 10px;
+        }
+
+        .feature-icon {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .feature-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 4px;
+        }
+
+        .feature-desc {
+            font-size: 12px;
+            color: #718096;
+        }
+
+        @media (max-width: 480px) {
+            .feature-grid {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="welcome-container">
+        <div class="welcome-header">
+            <h1 class="welcome-title">欢迎访问 WebServer</h1>
+            <p class="welcome-subtitle">高性能的现代化 Web 服务器平台<br>请选择您的操作</p>
         </div>
-    </body>
+        
+        <div class="button-group">
+            <form action="0" method="post" style="width: 100%;">
+                <button type="submit" class="action-button register-button">
+                    <span class="icon register-icon"></span>
+                    新用户注册
+                </button>
+            </form>
+            
+            <div class="divider">
+                <span>或者</span>
+            </div>
+            
+            <form action="1" method="post" style="width: 100%;">
+                <button type="submit" class="action-button login-button">
+                    <span class="icon login-icon"></span>
+                    已有账号登录
+                </button>
+            </form>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                    </svg>
+                </div>
+                <div class="feature-title">高性能</div>
+                <div class="feature-desc">优化的服务器架构</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
+                        <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                    </svg>
+                </div>
+                <div class="feature-title">安全可靠</div>
+                <div class="feature-desc">企业级安全保障</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">
+                    <svg width="20" height="20" fill="white" viewBox="0 0 24 24">
+                        <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9z"/>
+                    </svg>
+                </div>
+                <div class="feature-title">快速响应</div>
+                <div class="feature-desc">毫秒级响应时间</div>
+            </div>
+        </div>
+    </div>
+</body>
 </html>
 
 

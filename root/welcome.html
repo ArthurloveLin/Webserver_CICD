@@ -1,27 +1,595 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>WebServer</title>
-    </head>
-    <body>
-    <br/>
-    <br/>
-    <div align="center"><font size="5"> <strong>是时候做出选择了</strong></font></div>
-	<br/>
-		<br/>
-		<form action="5" method="post">
- 			<div align="center"><button type="submit">xxx.jpg</button></div>
-                </form>
-		<br/>
-                <form action="6" method="post">
-                        <div align="center"><button type="submit" >xxx.avi</button></div>
-                </form>
-		<br/>
-		<form action="7" method="post">
- 			<div align="center"><button type="submit">关注我</button></div>
-                </form>
-		
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>欢迎使用 WebServer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .dashboard-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 50px 40px;
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .dashboard-header {
+            margin-bottom: 40px;
+        }
+
+        .dashboard-title {
+            font-size: 32px;
+            font-weight: 700;
+            color: #2d3748;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+        }
+
+        .dashboard-subtitle {
+            color: #718096;
+            font-size: 16px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+
+        .success-badge {
+            display: inline-flex;
+            align-items: center;
+            background: linear-gradient(135deg, #48bb78, #38a169);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .success-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 6px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>');
+            background-size: contain;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-top: 30px;
+        }
+
+        .option-button {
+            width: 100%;
+            padding: 20px 24px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: white;
+            color: #2d3748;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .option-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .option-button:hover::before {
+            left: 100%;
+        }
+
+        .option-button:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+        }
+
+        .option-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 12px;
+            opacity: 0.7;
+        }
+
+        .image-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>');
+            background-size: contain;
+        }
+
+        .video-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>');
+            background-size: contain;
+        }
+
+        .follow-icon {
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>');
+            background-size: contain;
+        }
+
+        .primary-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+
+        .primary-button:hover {
+            border-color: transparent;
+            box-shadow: 0 15px 35px rgba(102, 126, 234, 0.3);
+        }
+
+        .option-label {
+            flex: 1;
+            text-align: center;
+        }
+
+        .option-description {
+            font-size: 12px;
+            color: #718096;
+            font-weight: 400;
+            margin-top: 4px;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .dashboard-container {
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @media (max-width: 480px) {
+            .dashboard-container {
+                margin: 20px;
+                padding: 40px 30px;
+            }
+            
+            .dashboard-title {
+                font-size: 28px;
+            }
+
+            .option-button {
+                padding: 18px 20px;
+                font-size: 15px;
+            }
+        }
+
+        .user-info {
+            background: #f7fafc;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+        }
+
+        .user-greeting {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+
+        .feature-highlight {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+
+        .feature-item {
+            text-align: center;
+            padding: 15px 10px;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 8px;
+        }
+
+        .feature-number {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .feature-text {
+            font-size: 11px;
+            color: #718096;
+            font-weight: 500;
+        }
+
+        @media (max-width: 480px) {
+            .feature-highlight {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <div class="success-badge">
+                <span class="success-icon"></span>
+                登录成功
+            </div>
+            <h1 class="dashboard-title">欢迎进入控制台</h1>
+            <p class="dashboard-subtitle">选择您想要体验的功能</p>
         </div>
-    </body>
+
+        <div class="user-info">
+            <div class="user-greeting">🎉 欢迎使用 WebServer 平台！</div>
+        </div>
+
+        <div class="options-grid">
+            <form action="5" method="post" style="width: 100%;">
+                <button type="submit" class="option-button">
+                    <span class="option-icon image-icon"></span>
+                    <div class="option-label">
+                        <div>个人介绍</div>
+                        <div class="option-description">查看个人简历和相关信息</div>
+                    </div>
+                </button>
+            </form>
+            
+            <form action="6" method="post" style="width: 100%;">
+                <button type="submit" class="option-button">
+                    <span class="option-icon video-icon"></span>
+                    <div class="option-label">
+                        <div>视频资源</div>
+                        <div class="option-description">观看服务器视频内容</div>
+                    </div>
+                </button>
+            </form>
+            
+            <button type="button" class="option-button primary-button" onclick="showContactQR()">
+                <span class="option-icon contact-icon"></span>
+                <div class="option-label">
+                    <div>联系本人</div>
+                    <div class="option-description">扫码或点击获取联系方式</div>
+                </div>
+            </button>
+        </div>
+
+        <div class="feature-highlight">
+            <div class="feature-item">
+                <div class="feature-number">99.9%</div>
+                <div class="feature-text">服务可用性</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-number">&lt;50ms</div>
+                <div class="feature-text">平均响应时间</div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-number">24/7</div>
+                <div class="feature-text">技术支持</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 二维码弹出层 -->
+    <div id="qr-modal" class="qr-modal" onclick="hideContactQR(event)">
+        <div class="qr-modal-content" onclick="event.stopPropagation()">
+            <div class="qr-header">
+                <h3>联系方式</h3>
+                <button class="qr-close-btn" onclick="hideContactQR()">&times;</button>
+            </div>
+            <div class="qr-body">
+                <div class="qr-code-container">
+                    <img src="./wechat-qr.png" 
+                         alt="微信二维码" 
+                         class="qr-code-image"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="qr-code-placeholder" style="display: none;">
+                        <div class="qr-code-icon">📱</div>
+                        <p>请将二维码文件命名为 wechat-qr.png 并放到 root 目录</p>
+                    </div>
+                </div>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <span class="contact-label">📧 邮箱：</span>
+                        <span class="contact-value">arthur071684@outlook.com</span>
+                    </div>
+                    <div class="contact-item">
+                        <span class="contact-label">📱 微信：</span>
+                        <span class="contact-value">arthur9527001</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* 联系图标样式 */
+        .contact-icon {
+            width: 24px;
+            height: 24px;
+            background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="white"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>');
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+
+        /* 二维码弹出层样式 */
+        .qr-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0);
+            backdrop-filter: blur(0px);
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+
+        .qr-modal.show {
+            background-color: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+        }
+
+        .qr-modal-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 0;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            transform: scale(0.7) translateY(30px);
+            opacity: 0;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .qr-modal.show .qr-modal-content {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        .qr-header {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px 25px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .qr-header h3 {
+            margin: 0;
+            color: white;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .qr-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+            padding: 0;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .qr-close-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: rotate(90deg);
+        }
+
+        .qr-body {
+            padding: 25px;
+            background: white;
+        }
+
+        .qr-code-container {
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .qr-code-image {
+            width: 180px;
+            height: 180px;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 2px solid #e0e6ed;
+            object-fit: cover;
+            transition: all 0.3s ease;
+        }
+
+        .qr-code-image:hover {
+            transform: scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .qr-code-placeholder {
+            width: 180px;
+            height: 180px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #e0e6ed;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .qr-code-placeholder::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.5) 50%, transparent 70%);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+            100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+
+        .qr-code-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+            z-index: 1;
+            position: relative;
+        }
+
+        .qr-code-placeholder p {
+            margin: 0;
+            color: #666;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1;
+            position: relative;
+        }
+
+        .contact-info {
+            /* 移除了无效的space-y属性，使用margin-bottom代替 */
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: all 0.2s ease;
+        }
+
+        .contact-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .contact-label {
+            font-weight: 600;
+            color: #495057;
+            min-width: 80px;
+        }
+
+        .contact-value {
+            color: #6c757d;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .qr-modal-content {
+                width: 95%;
+                margin: 20px;
+            }
+            
+            .qr-code-placeholder {
+                width: 150px;
+                height: 150px;
+            }
+            
+            .qr-header {
+                padding: 15px 20px 12px;
+            }
+            
+            .qr-body {
+                padding: 20px;
+            }
+        }
+    </style>
+
+    <script>
+        function showContactQR() {
+            const modal = document.getElementById('qr-modal');
+            // 首先显示模态框但保持透明
+            modal.style.display = 'flex';
+            
+            // 强制浏览器重绘，然后添加show类
+            modal.offsetHeight; // 触发重绘
+            
+            // 延迟添加show类以实现平滑动画
+            requestAnimationFrame(() => {
+                modal.classList.add('show');
+            });
+            
+            // 禁止页面滚动
+            document.body.style.overflow = 'hidden';
+        }
+
+        function hideContactQR(event) {
+            // 如果点击的是模态框背景或关闭按钮
+            if (!event || event.target.id === 'qr-modal' || event.target.classList.contains('qr-close-btn')) {
+                const modal = document.getElementById('qr-modal');
+                
+                // 移除show类，开始退出动画
+                modal.classList.remove('show');
+                
+                // 等待动画完成后隐藏（400ms对应CSS transition时间）
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    // 恢复页面滚动
+                    document.body.style.overflow = 'auto';
+                }, 400);
+            }
+        }
+
+        // ESC键关闭弹窗
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                hideContactQR({ target: { id: 'qr-modal' } });
+            }
+        });
+    </script>
+</body>
 </html>
