@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{page_title}} - {{site_title}}</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {{#if is_admin}}
+    <link rel="stylesheet" href="/static/css/admin.css">
+    {{/if}}
+</head>
+<body>
+    {{>header}}
+    
+    <main class="main-content">
+        {{{content}}}
+    </main>
+    
+    {{>footer}}
+    
+    <script src="/static/js/main.js"></script>
+    {{#if is_admin}}
+    <script src="/static/js/admin.js"></script>
+    {{/if}}
+</body>
+</html>

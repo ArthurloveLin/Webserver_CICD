@@ -25,6 +25,7 @@
 #include "../CGImysql/sql_connection_pool.h"
 #include "../timer/lst_timer.h"
 #include "../log/log.h"
+#include "../blog/blog_handler.h"
 
 class http_conn
 {
@@ -83,6 +84,7 @@ public:
         return &m_address;
     }
     void initmysql_result(connection_pool *connPool);
+    static void init_blog_handler(connection_pool *connPool);
     int timer_flag;
     int improv;
 
@@ -147,6 +149,8 @@ private:
     char sql_user[100];
     char sql_passwd[100];
     char sql_name[100];
+    
+    static BlogHandler* blog_handler;
 };
 
 #endif

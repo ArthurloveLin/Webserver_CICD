@@ -1,0 +1,79 @@
+<div class="container">
+    <nav class="breadcrumb">
+        <a href="/blog/">首页</a> > 
+        <a href="/blog/category/{{category_id}}">{{category_name}}</a> > 
+        <span>{{title}}</span>
+    </nav>
+
+    <article class="article-detail">
+        <header class="article-header">
+            <h1 class="article-title">{{title}}</h1>
+            <div class="article-meta">
+                <span>📅 发布时间：{{created_at}}</span>
+                <span>📂 分类：{{category_name}}</span>
+                <span>👁️ 浏览：{{view_count}}</span>
+                <span>💬 评论：{{comment_count}}</span>
+                {{#if is_admin}}
+                <span><a href="/blog/admin/edit/{{article_id}}" class="btn btn-sm">编辑</a></span>
+                {{/if}}
+            </div>
+        </header>
+
+        <div class="article-content">
+            {{{content}}}
+        </div>
+
+        <div class="article-actions">
+            <button class="like-btn" data-type="article" data-id="{{article_id}}">
+                👍 点赞 <span class="like-count">{{like_count}}</span>
+            </button>
+        </div>
+    </article>
+
+    <section class="comments">
+        <h3>评论 ({{comment_count}})</h3>
+        
+        {{#if has_comments}}
+        <div class="comments-list">
+            {{#each comments}}
+            <div class="comment">
+                <div class="comment-header">
+                    <span class="comment-author">{{user_name}}</span>
+                    <span class="comment-time">{{created_at}}</span>
+                </div>
+                <div class="comment-content">{{content}}</div>
+                <div class="comment-actions">
+                    <button class="like-btn btn-sm" data-type="comment" data-id="{{comment_id}}">
+                        👍 <span class="like-count">{{like_count}}</span>
+                    </button>
+                </div>
+            </div>
+            {{/each}}
+        </div>
+        {{/if}}
+
+        <div class="comment-form">
+            <h4>发表评论</h4>
+            <form id="comment-form" method="post" action="/blog/api/comments">
+                <input type="hidden" name="article_id" value="{{article_id}}">
+                
+                <div class="form-group">
+                    <label for="user_name">姓名 *</label>
+                    <input type="text" id="user_name" name="user_name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">邮箱</label>
+                    <input type="email" id="email" name="email">
+                </div>
+                
+                <div class="form-group">
+                    <label for="content">评论内容 *</label>
+                    <textarea id="content" name="content" rows="4" required placeholder="请输入您的评论..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn">提交评论</button>
+            </form>
+        </div>
+    </section>
+</div>

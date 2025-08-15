@@ -1,0 +1,68 @@
+<div class="container">
+    <div class="header">
+        <h1>{{site_title}}</h1>
+        <p>{{site_description}}</p>
+        <div class="nav">
+            <a href="/blog/" class="btn">首页</a>
+            <a href="/blog/admin/" class="btn btn-secondary">管理后台</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="content">
+            {{#if has_articles}}
+            {{#each articles}}
+            <article class="article">
+                <h2 class="article-title">
+                    <a href="/blog/article/{{article_id}}">{{title}}</a>
+                </h2>
+                <div class="article-meta">
+                    <span>📅 {{created_at}}</span>
+                    <span>📂 {{category_name}}</span>
+                    <span>👁️ {{view_count}}</span>
+                    <span>💬 {{comment_count}}</span>
+                </div>
+                <div class="article-summary">
+                    {{summary}}
+                </div>
+                <div class="article-actions">
+                    <a href="/blog/article/{{article_id}}" class="btn">阅读全文</a>
+                </div>
+            </article>
+            {{/each}}
+            {{/if}}
+            
+            {{#if no_articles}}
+            <div class="no-content">
+                <h3>暂无文章</h3>
+                <p>还没有发布任何文章，<a href="/blog/admin/new">立即创建</a>第一篇文章吧！</p>
+            </div>
+            {{/if}}
+        </div>
+
+        <aside class="sidebar">
+            <div class="widget">
+                <h3>文章分类</h3>
+                <ul class="category-list">
+                    {{#each categories}}
+                    <li>
+                        <a href="/blog/category/{{category_id}}">
+                            {{name}} <span class="count">{{article_count}}</span>
+                        </a>
+                    </li>
+                    {{/each}}
+                </ul>
+            </div>
+
+            <div class="widget">
+                <h3>搜索</h3>
+                <form id="search-form" method="get" action="/blog/search">
+                    <div class="search-box">
+                        <input type="text" id="search-input" name="q" placeholder="搜索文章..." />
+                        <button type="submit" class="search-btn">🔍</button>
+                    </div>
+                </form>
+            </div>
+        </aside>
+    </div>
+</div>

@@ -16,6 +16,7 @@ const char *error_500_form = "There was an unusual problem serving the request f
 
 locker m_lock;
 map<string, string> users;
+BlogHandler* http_conn::blog_handler = nullptr;
 
 void http_conn::initmysql_result(connection_pool *connPool)
 {
@@ -44,6 +45,16 @@ void http_conn::initmysql_result(connection_pool *connPool)
         string temp1(row[0]);
         string temp2(row[1]);
         users[temp1] = temp2;
+    }
+}
+
+void http_conn::init_blog_handler(connection_pool *connPool)
+{
+    if (blog_handler == nullptr)
+    {
+        blog_handler = new BlogHandler();
+        blog_handler->init(connPool);
+        printf("Blog handler initialized\n");
     }
 }
 
@@ -255,6 +266,16 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text)
         m_method = POST;
         cgi = 1;
     }
+    else if (strcasecmp(method, "PUT") == 0)
+    {
+        m_method = PUT;
+        cgi = 1;
+    }
+    else if (strcasecmp(method, "DELETE") == 0)
+    {
+        m_method = DELETE;
+        cgi = 1;
+    }
     else
         return BAD_REQUEST;
     m_url += strspn(m_url, " \t");
@@ -391,6 +412,88 @@ http_conn::HTTP_CODE http_conn::do_request()
     int len = strlen(doc_root);
     //printf("m_url:%s\n", m_url);
     const char *p = strrchr(m_url, '/');
+
+    // 处理博客路由
+    if (blog_handler && strncmp(m_url, "/blog", 5) == 0)
+    {
+        string method_str;
+        switch (m_method)
+        {
+        case GET:
+            method_str = "GET";
+            break;
+        case POST:
+            method_str = "POST";
+            break;
+        case PUT:
+            method_str = "PUT";
+            break;
+        case DELETE:
+            method_str = "DELETE";
+            break;
+        default:
+            method_str = "GET";
+            break;
+        }
+        
+        string url_str(m_url);
+        string post_data_str = m_string ? string(m_string) : "";
+        string client_ip = inet_ntoa(m_address.sin_addr);
+        
+        string blog_response = blog_handler->handle_request(method_str, url_str, post_data_str, client_ip);
+        
+        if (!blog_response.empty())
+        {
+            // 将博客响应写入临时文件并使用mmap
+            char temp_file[] = "/tmp/blog_response_XXXXXX";
+            int temp_fd = mkstemp(temp_file);
+            if (temp_fd != -1)
+            {
+                ssize_t written = ::write(temp_fd, blog_response.c_str(), blog_response.length());
+                close(temp_fd);
+                
+                if (written > 0 && stat(temp_file, &m_file_stat) >= 0)
+                {
+                    int fd = open(temp_file, O_RDONLY);
+                    if (fd >= 0)
+                    {
+                        m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+                        close(fd);
+                        // 注意：不立即删除临时文件，让unmap时处理
+                        return FILE_REQUEST;
+                    }
+                }
+                unlink(temp_file);
+            }
+            return INTERNAL_ERROR;
+        }
+        return NO_RESOURCE;
+    }
+
+    // 处理静态文件请求
+    if (strncmp(m_url, "/static", 7) == 0) {
+        // 构建静态文件路径
+        string static_path = string(doc_root) + string(m_url);
+        strncpy(m_real_file, static_path.c_str(), FILENAME_LEN - 1);
+        
+        // 检查文件是否存在
+        if (stat(m_real_file, &m_file_stat) < 0) {
+            return NO_RESOURCE;
+        }
+        
+        if (!(m_file_stat.st_mode & S_IROTH)) {
+            return FORBIDDEN_REQUEST;
+        }
+        
+        if (S_ISDIR(m_file_stat.st_mode)) {
+            return BAD_REQUEST;
+        }
+        
+        int fd = open(m_real_file, O_RDONLY);
+        m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+        close(fd);
+        return FILE_REQUEST;
+    }
 
     //处理cgi
     if (cgi == 1 && (*(p + 1) == '2' || *(p + 1) == '3'))
@@ -631,10 +734,10 @@ bool http_conn::add_content_type()
             content_type = "image/gif";
         }
         else if (strcmp(ext, ".css") == 0) {
-            content_type = "text/css";
+            content_type = "text/css; charset=utf-8";
         }
         else if (strcmp(ext, ".js") == 0) {
-            content_type = "application/javascript";
+            content_type = "application/javascript; charset=utf-8";
         }
         else if (strcmp(ext, ".mp4") == 0) {
             content_type = "video/mp4";

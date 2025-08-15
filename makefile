@@ -8,7 +8,10 @@ else
 
 endif
 
-server: main.cpp  ./timer/lst_timer.cpp ./http/http_conn.cpp ./log/log.cpp ./CGImysql/sql_connection_pool.cpp  webserver.cpp config.cpp
+# 添加UTF-8支持
+CXXFLAGS += -finput-charset=UTF-8 -fexec-charset=UTF-8
+
+server: main.cpp  ./timer/lst_timer.cpp ./http/http_conn.cpp ./log/log.cpp ./CGImysql/sql_connection_pool.cpp  webserver.cpp config.cpp ./blog/blog_handler.cpp ./blog/template_engine.cpp
 	$(CXX) -o server  $^ $(CXXFLAGS) -lpthread -lmysqlclient
 
 clean:

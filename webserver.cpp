@@ -92,6 +92,9 @@ void WebServer::sql_pool()
 
     //初始化数据库读取表
     users->initmysql_result(m_connPool);
+    
+    //初始化博客处理器
+    http_conn::init_blog_handler(m_connPool);
 }
 
 void WebServer::thread_pool()
