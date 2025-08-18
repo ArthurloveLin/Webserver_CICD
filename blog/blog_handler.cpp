@@ -1037,24 +1037,224 @@ string BlogHandler::render_admin_editor(int article_id) {
     html << "<meta charset=\"UTF-8\">\n";
     html << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     html << "<title>" << (is_edit ? "编辑文章" : "新建文章") << " - TinyWebServer博客</title>\n";
-    html << "<link rel=\"stylesheet\" href=\"/static/css/main.css\">\n";
-    html << "<link rel=\"stylesheet\" href=\"/static/css/admin.css\">\n";
+    html << "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n";
+    html << "<style>\n";
+    
+    // 统一的样式，基于welcome.html的风格
+    html << "* {\n";
+    html << "    margin: 0;\n";
+    html << "    padding: 0;\n";
+    html << "    box-sizing: border-box;\n";
+    html << "}\n\n";
+    
+    html << "body {\n";
+    html << "    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n";
+    html << "    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n";
+    html << "    min-height: 100vh;\n";
+    html << "    padding: 20px;\n";
+    html << "}\n\n";
+    
+    html << ".editor-container {\n";
+    html << "    background: rgba(255, 255, 255, 0.95);\n";
+    html << "    backdrop-filter: blur(10px);\n";
+    html << "    border-radius: 20px;\n";
+    html << "    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);\n";
+    html << "    border: 1px solid rgba(255, 255, 255, 0.2);\n";
+    html << "    max-width: 1200px;\n";
+    html << "    margin: 0 auto;\n";
+    html << "    overflow: hidden;\n";
+    html << "    animation: slideUp 0.6s ease-out;\n";
+    html << "}\n\n";
+    
+    html << ".editor-header {\n";
+    html << "    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n";
+    html << "    color: white;\n";
+    html << "    padding: 40px;\n";
+    html << "    text-align: center;\n";
+    html << "}\n\n";
+    
+    html << ".editor-title {\n";
+    html << "    font-size: 32px;\n";
+    html << "    font-weight: 700;\n";
+    html << "    margin-bottom: 12px;\n";
+    html << "    letter-spacing: -0.5px;\n";
+    html << "}\n\n";
+    
+    html << ".editor-subtitle {\n";
+    html << "    font-size: 16px;\n";
+    html << "    font-weight: 400;\n";
+    html << "    opacity: 0.9;\n";
+    html << "    margin-bottom: 20px;\n";
+    html << "}\n\n";
+    
+    html << ".admin-nav {\n";
+    html << "    display: flex;\n";
+    html << "    justify-content: center;\n";
+    html << "    gap: 15px;\n";
+    html << "    flex-wrap: wrap;\n";
+    html << "}\n\n";
+    
+    html << ".admin-nav a {\n";
+    html << "    background: rgba(255, 255, 255, 0.2);\n";
+    html << "    color: white;\n";
+    html << "    text-decoration: none;\n";
+    html << "    padding: 8px 16px;\n";
+    html << "    border-radius: 20px;\n";
+    html << "    font-size: 14px;\n";
+    html << "    font-weight: 500;\n";
+    html << "    transition: all 0.3s ease;\n";
+    html << "    border: 1px solid rgba(255, 255, 255, 0.3);\n";
+    html << "}\n\n";
+    
+    html << ".admin-nav a:hover {\n";
+    html << "    background: rgba(255, 255, 255, 0.3);\n";
+    html << "    transform: translateY(-2px);\n";
+    html << "}\n\n";
+    
+    html << ".editor-content {\n";
+    html << "    padding: 40px;\n";
+    html << "}\n\n";
+    
+    html << ".editor-form {\n";
+    html << "    display: grid;\n";
+    html << "    grid-template-columns: 2fr 1fr;\n";
+    html << "    gap: 40px;\n";
+    html << "}\n\n";
+    
+    html << ".form-group {\n";
+    html << "    margin-bottom: 25px;\n";
+    html << "}\n\n";
+    
+    html << ".form-group label {\n";
+    html << "    display: block;\n";
+    html << "    margin-bottom: 8px;\n";
+    html << "    font-weight: 600;\n";
+    html << "    color: #2d3748;\n";
+    html << "    font-size: 14px;\n";
+    html << "}\n\n";
+    
+    html << ".form-group input,\n";
+    html << ".form-group textarea,\n";
+    html << ".form-group select {\n";
+    html << "    width: 100%;\n";
+    html << "    padding: 12px 16px;\n";
+    html << "    border: 2px solid #e2e8f0;\n";
+    html << "    border-radius: 12px;\n";
+    html << "    font-size: 14px;\n";
+    html << "    font-family: inherit;\n";
+    html << "    transition: all 0.3s ease;\n";
+    html << "    background: white;\n";
+    html << "}\n\n";
+    
+    html << ".form-group input:focus,\n";
+    html << ".form-group textarea:focus,\n";
+    html << ".form-group select:focus {\n";
+    html << "    outline: none;\n";
+    html << "    border-color: #667eea;\n";
+    html << "    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);\n";
+    html << "}\n\n";
+    
+    html << ".content-editor {\n";
+    html << "    min-height: 400px;\n";
+    html << "    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;\n";
+    html << "    line-height: 1.6;\n";
+    html << "}\n\n";
+    
+    html << ".editor-sidebar {\n";
+    html << "    background: #f8f9fa;\n";
+    html << "    border-radius: 12px;\n";
+    html << "    padding: 25px;\n";
+    html << "    height: fit-content;\n";
+    html << "}\n\n";
+    
+    html << ".editor-sidebar h3 {\n";
+    html << "    font-size: 18px;\n";
+    html << "    font-weight: 600;\n";
+    html << "    color: #2d3748;\n";
+    html << "    margin-bottom: 20px;\n";
+    html << "    border-bottom: 2px solid #667eea;\n";
+    html << "    padding-bottom: 8px;\n";
+    html << "}\n\n";
+    
+    html << ".btn {\n";
+    html << "    display: inline-block;\n";
+    html << "    padding: 12px 24px;\n";
+    html << "    border: none;\n";
+    html << "    border-radius: 12px;\n";
+    html << "    font-size: 14px;\n";
+    html << "    font-weight: 600;\n";
+    html << "    cursor: pointer;\n";
+    html << "    text-decoration: none;\n";
+    html << "    transition: all 0.3s ease;\n";
+    html << "    margin-right: 10px;\n";
+    html << "    margin-bottom: 10px;\n";
+    html << "}\n\n";
+    
+    html << ".btn-success {\n";
+    html << "    background: linear-gradient(135deg, #48bb78, #38a169);\n";
+    html << "    color: white;\n";
+    html << "}\n\n";
+    
+    html << ".btn-success:hover {\n";
+    html << "    transform: translateY(-2px);\n";
+    html << "    box-shadow: 0 8px 25px rgba(72, 187, 120, 0.3);\n";
+    html << "}\n\n";
+    
+    html << ".btn-secondary {\n";
+    html << "    background: #e2e8f0;\n";
+    html << "    color: #4a5568;\n";
+    html << "}\n\n";
+    
+    html << ".btn-secondary:hover {\n";
+    html << "    background: #cbd5e0;\n";
+    html << "    transform: translateY(-2px);\n";
+    html << "}\n\n";
+    
+    html << "@keyframes slideUp {\n";
+    html << "    from {\n";
+    html << "        opacity: 0;\n";
+    html << "        transform: translateY(30px);\n";
+    html << "    }\n";
+    html << "    to {\n";
+    html << "        opacity: 1;\n";
+    html << "        transform: translateY(0);\n";
+    html << "    }\n";
+    html << "}\n\n";
+    
+    html << "@media (max-width: 768px) {\n";
+    html << "    .editor-form {\n";
+    html << "        grid-template-columns: 1fr;\n";
+    html << "    }\n";
+    html << "    \n";
+    html << "    .editor-content {\n";
+    html << "        padding: 20px;\n";
+    html << "    }\n";
+    html << "    \n";
+    html << "    .editor-header {\n";
+    html << "        padding: 30px 20px;\n";
+    html << "    }\n";
+    html << "    \n";
+    html << "    .editor-title {\n";
+    html << "        font-size: 24px;\n";
+    html << "    }\n";
+    html << "}\n";
+    
+    html << "</style>\n";
     html << "</head>\n";
     html << "<body>\n";
     
-    html << "<div class=\"container\">\n";
-    html << "<div class=\"admin-header\">\n";
-    html << "<div class=\"container\">\n";
-    html << "<h1>" << (is_edit ? "编辑文章" : "新建文章") << "</h1>\n";
+    html << "<div class=\"editor-container\">\n";
+    html << "<div class=\"editor-header\">\n";
+    html << "<h1 class=\"editor-title\">" << (is_edit ? "✏️ 编辑文章" : "📝 新建文章") << "</h1>\n";
+    html << "<p class=\"editor-subtitle\">使用 Markdown 语法编写优质内容</p>\n";
     html << "<nav class=\"admin-nav\">\n";
-    html << "<a href=\"/blog/admin/\">仪表盘</a>\n";
-    html << "<a href=\"/blog/admin/new\">新建文章</a>\n";
-    html << "<a href=\"/blog/\">返回前台</a>\n";
+    html << "<a href=\"/blog/admin/\">📊 仪表盘</a>\n";
+    html << "<a href=\"/blog/admin/new\">➕ 新建文章</a>\n";
+    html << "<a href=\"/blog/\">🏠 返回前台</a>\n";
     html << "</nav>\n";
     html << "</div>\n";
-    html << "</div>\n";
     
-    html << "<div class=\"editor-container\">\n";
+    html << "<div class=\"editor-content\">\n";
     html << "<form id=\"article-form\" method=\"post\" action=\"" 
          << (is_edit ? "/blog/api/articles/" + to_string(article_id) : "/blog/api/articles") << "\">\n";
     
@@ -1067,8 +1267,8 @@ string BlogHandler::render_admin_editor(int article_id) {
     
     // 标题
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"title\">文章标题 *</label>\n";
-    html << "<input type=\"text\" id=\"title\" name=\"title\" required placeholder=\"请输入文章标题\" ";
+    html << "<label for=\"title\">📝 文章标题 *</label>\n";
+    html << "<input type=\"text\" id=\"title\" name=\"title\" required placeholder=\"请输入一个吸引人的标题\" ";
     if (is_edit) {
         html << "value=\"" << html_escape(article.title) << "\" ";
     }
@@ -1077,8 +1277,8 @@ string BlogHandler::render_admin_editor(int article_id) {
     
     // 摘要
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"summary\">文章摘要</label>\n";
-    html << "<textarea id=\"summary\" name=\"summary\" rows=\"3\" placeholder=\"请输入文章摘要（可选）\">";
+    html << "<label for=\"summary\">📄 文章摘要</label>\n";
+    html << "<textarea id=\"summary\" name=\"summary\" rows=\"3\" placeholder=\"简要描述文章内容，帮助读者快速了解（可选）\">";
     if (is_edit) {
         html << html_escape(article.summary);
     }
@@ -1087,8 +1287,8 @@ string BlogHandler::render_admin_editor(int article_id) {
     
     // 内容
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"content\">文章内容 *</label>\n";
-    html << "<textarea id=\"content\" name=\"content\" class=\"content-editor\" rows=\"20\" required placeholder=\"请输入文章内容\">";
+    html << "<label for=\"content\">✍️ 文章内容 *</label>\n";
+    html << "<textarea id=\"content\" name=\"content\" class=\"content-editor\" rows=\"20\" required placeholder=\"在这里开始编写您的精彩内容...\\n\\n支持 Markdown 语法：\\n- # 标题\\n- **粗体** *斜体*\\n- `代码`\\n- [链接](url)\\n- ![图片](url)\">";
     if (is_edit) {
         html << html_escape(article.content);
     }
@@ -1100,22 +1300,22 @@ string BlogHandler::render_admin_editor(int article_id) {
     html << "<div class=\"editor-sidebar\">\n";
     
     // 发布设置
-    html << "<h3>发布设置</h3>\n";
+    html << "<h3>⚙️ 发布设置</h3>\n";
     
     // 状态
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"status\">状态</label>\n";
+    html << "<label for=\"status\">📊 发布状态</label>\n";
     html << "<select id=\"status\" name=\"status\">\n";
-    html << "<option value=\"draft\"" << (is_edit && article.status == "draft" ? " selected" : "") << ">草稿</option>\n";
-    html << "<option value=\"published\"" << (is_edit && article.status == "published" ? " selected" : "") << ">已发布</option>\n";
+    html << "<option value=\"draft\"" << (is_edit && article.status == "draft" ? " selected" : "") << ">📄 草稿</option>\n";
+    html << "<option value=\"published\"" << (is_edit && article.status == "published" ? " selected" : "") << ">🌟 已发布</option>\n";
     html << "</select>\n";
     html << "</div>\n";
     
     // 分类
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"category_id\">分类</label>\n";
+    html << "<label for=\"category_id\">📂 文章分类</label>\n";
     html << "<select id=\"category_id\" name=\"category_id\">\n";
-    html << "<option value=\"\">选择分类</option>\n";
+    html << "<option value=\"\">🔍 选择分类</option>\n";
     for (const auto& category : categories) {
         html << "<option value=\"" << category.category_id << "\"";
         if (is_edit && article.category_id == category.category_id) {
@@ -1128,24 +1328,24 @@ string BlogHandler::render_admin_editor(int article_id) {
     
     // 标签
     html << "<div class=\"form-group\">\n";
-    html << "<label for=\"tags\">标签</label>\n";
-    html << "<input type=\"text\" id=\"tags\" name=\"tags\" placeholder=\"用逗号分隔多个标签\">\n";
+    html << "<label for=\"tags\">🏷️ 文章标签</label>\n";
+    html << "<input type=\"text\" id=\"tags\" name=\"tags\" placeholder=\"技术, 前端, React（用逗号分隔）\">\n";
     html << "</div>\n";
     
     // 操作按钮
     html << "<div class=\"form-group\">\n";
-    html << "<button type=\"submit\" class=\"btn btn-success\">保存文章</button>\n";
+    html << "<button type=\"submit\" class=\"btn btn-success\">💾 保存文章</button>\n";
     if (is_edit) {
-        html << "<a href=\"/blog/article/" << article_id << "\" class=\"btn btn-secondary\">预览</a>\n";
+        html << "<a href=\"/blog/article/" << article_id << "\" class=\"btn btn-secondary\">👀 预览</a>\n";
     }
-    html << "<a href=\"/blog/admin/\" class=\"btn btn-secondary\">取消</a>\n";
+    html << "<a href=\"/blog/admin/\" class=\"btn btn-secondary\">❌ 取消</a>\n";
     html << "</div>\n";
     
     html << "</div>\n"; // editor-sidebar
     html << "</div>\n"; // editor-form
     html << "</form>\n";
+    html << "</div>\n"; // editor-content
     html << "</div>\n"; // editor-container
-    html << "</div>\n"; // container
     
     // JavaScript
     html << "<script>\n";
