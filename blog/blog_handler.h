@@ -7,7 +7,6 @@
 #include <mysql/mysql.h>
 #include "../CGImysql/sql_connection_pool.h"
 #include "../log/log.h"
-#include "template_engine.h"
 
 using namespace std;
 
@@ -62,7 +61,7 @@ public:
     void init(connection_pool* conn_pool);
     
     // 路由处理方法
-    string handle_request(const string& method, const string& url, const string& post_data, const string& client_ip);
+    string handle_request(const string& method, const string& url, const string& post_data, const string& client_ip, const string& cookie_header = "");
     
     // 页面渲染方法
     string render_blog_index(int page = 1);
@@ -80,13 +79,28 @@ public:
     string api_add_comment(const string& post_data);
     string api_toggle_like(const string& post_data);
     
-    // 管理员验证
-    bool is_admin_session(const string& session_id);
-    string create_admin_session(const string& username);
+    // 用户权限验证  
+    bool check_user_permission(const string& cookie_header, const string& required_role = "guest");
+    string get_current_user(const string& cookie_header);
+    string get_user_role(const string& cookie_header);
+    bool is_admin_user(const string& cookie_header);
+    bool is_logged_in(const string& cookie_header);
+    
+    // 辅助函数
+    string extract_session_id(const string& cookie_header);
+    
+    // Session验证函数指针 (由http_conn设置)
+    static bool (*validate_session_func)(const string& session_id);
+    static string (*get_username_func)(const string& session_id);
+    static string (*get_role_func)(const string& session_id);
+    
+    // 初始化函数指针
+    static void set_session_functions(bool (*validate_func)(const string&), 
+                                    string (*username_func)(const string&),
+                                    string (*role_func)(const string&));
     
 private:
     connection_pool* m_conn_pool;
-    TemplateEngine* template_engine;
     
     // 数据库操作方法
     vector<Article> get_articles_list(int page = 1, int limit = 10, int category_id = 0, const string& status = "published");

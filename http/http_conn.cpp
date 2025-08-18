@@ -15,8 +15,13 @@ const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the request file.\n";
 
 locker m_lock;
-map<string, string> users;
+map<string, string> users; // 保持原有的用户名密码映射
+map<string, string> user_roles; // 新增：用户名到角色的映射
 BlogHandler* http_conn::blog_handler = nullptr;
+
+// Session管理静态成员定义
+unordered_map<string, UserSession> http_conn::sessions;
+locker http_conn::session_lock;
 
 void http_conn::initmysql_result(connection_pool *connPool)
 {
@@ -24,8 +29,8 @@ void http_conn::initmysql_result(connection_pool *connPool)
     MYSQL *mysql = NULL;
     connectionRAII mysqlcon(&mysql, connPool);
 
-    //在user表中检索username，passwd数据，浏览器端输入
-    if (mysql_query(mysql, "SELECT username,passwd FROM user"))
+    //在user表中检索username，passwd，role数据，浏览器端输入
+    if (mysql_query(mysql, "SELECT username,passwd,role FROM user"))
     {
         LOG_ERROR("SELECT error:%s\n", mysql_error(mysql));
     }
@@ -39,12 +44,14 @@ void http_conn::initmysql_result(connection_pool *connPool)
     //返回所有字段结构的数组
     MYSQL_FIELD *fields = mysql_fetch_fields(result);
 
-    //从结果集中获取下一行，将对应的用户名和密码，存入map中
+    //从结果集中获取下一行，将对应的用户名、密码和角色，存入map中
     while (MYSQL_ROW row = mysql_fetch_row(result))
     {
-        string temp1(row[0]);
-        string temp2(row[1]);
+        string temp1(row[0]); // username
+        string temp2(row[1]); // passwd
+        string temp3(row[2]); // role
         users[temp1] = temp2;
+        user_roles[temp1] = temp3;
     }
 }
 
@@ -54,6 +61,8 @@ void http_conn::init_blog_handler(connection_pool *connPool)
     {
         blog_handler = new BlogHandler();
         blog_handler->init(connPool);
+        // 设置session验证函数
+        BlogHandler::set_session_functions(validate_session, get_session_username, get_session_role);
         printf("Blog handler initialized\n");
     }
 }
@@ -156,6 +165,7 @@ void http_conn::init()
     m_version = 0;
     m_content_length = 0;
     m_host = 0;
+    m_cookie = 0;
     m_start_line = 0;
     m_checked_idx = 0;
     m_read_idx = 0;
@@ -340,6 +350,12 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text)
         text += strspn(text, " \t");
         m_host = text;
     }
+    else if (strncasecmp(text, "Cookie:", 7) == 0)
+    {
+        text += 7;
+        text += strspn(text, " \t");
+        m_cookie = text;
+    }
     else
     {
         LOG_INFO("oop!unknow header: %s", text);
@@ -440,7 +456,8 @@ http_conn::HTTP_CODE http_conn::do_request()
         string post_data_str = m_string ? string(m_string) : "";
         string client_ip = inet_ntoa(m_address.sin_addr);
         
-        string blog_response = blog_handler->handle_request(method_str, url_str, post_data_str, client_ip);
+        string cookie_str = m_cookie ? string(m_cookie) : "";
+        string blog_response = blog_handler->handle_request(method_str, url_str, post_data_str, client_ip, cookie_str);
         
         if (!blog_response.empty())
         {
@@ -524,20 +541,24 @@ http_conn::HTTP_CODE http_conn::do_request()
         if (*(p + 1) == '3')
         {
             //如果是注册，先检测数据库中是否有重名的
-            //没有重名的，进行增加数据
-            char *sql_insert = (char *)malloc(sizeof(char) * 200);
+            //没有重名的，进行增加数据，使用加密密码
+            string salt = generate_salt();
+            string hashed_password = hash_password(password, salt);
+            
+            char *sql_insert = (char *)malloc(sizeof(char) * 300);
             strcpy(sql_insert, "INSERT INTO user(username, passwd) VALUES(");
             strcat(sql_insert, "'");
             strcat(sql_insert, name);
             strcat(sql_insert, "', '");
-            strcat(sql_insert, password);
+            strcat(sql_insert, hashed_password.c_str());
             strcat(sql_insert, "')");
 
             if (users.find(name) == users.end())
             {
                 m_lock.lock();
                 int res = mysql_query(mysql, sql_insert);
-                users.insert(pair<string, string>(name, password));
+                users.insert(pair<string, string>(name, hashed_password));
+                user_roles[name] = "guest"; // 新注册用户默认为guest
                 m_lock.unlock();
 
                 if (!res)
@@ -552,8 +573,14 @@ http_conn::HTTP_CODE http_conn::do_request()
         //若浏览器端输入的用户名和密码在表中可以查找到，返回1，否则返回0
         else if (*(p + 1) == '2')
         {
-            if (users.find(name) != users.end() && users[name] == password)
+            if (users.find(name) != users.end() && verify_password(password, users[name]))
+            {
+                // 登录成功，存储用户信息并返回特殊状态码
+                login_username = string(name);
+                login_role = user_roles[name];
                 strcpy(m_url, "/welcome.html");
+                // 不在这里直接设置m_url，而是返回特殊状态码让process_write处理
+            }
             else
                 strcpy(m_url, "/logError.html");
         }
@@ -615,6 +642,12 @@ http_conn::HTTP_CODE http_conn::do_request()
     int fd = open(m_real_file, O_RDONLY);
     m_file_address = (char *)mmap(0, m_file_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     close(fd);
+    
+    // 检查是否是登录成功情况
+    if (!login_username.empty() && strcmp(m_url, "/welcome.html") == 0) {
+        return LOGIN_SUCCESS;
+    }
+    
     return FILE_REQUEST;
 }
 void http_conn::unmap()
@@ -754,6 +787,12 @@ bool http_conn::add_blank_line()
 {
     return add_response("%s", "\r\n");
 }
+
+bool http_conn::add_cookie(const string& name, const string& value, int max_age)
+{
+    return add_response("Set-Cookie: %s=%s; Max-Age=%d; Path=/\r\n", 
+                       name.c_str(), value.c_str(), max_age);
+}
 bool http_conn::add_content(const char *content)
 {
     return add_response("%s", content);
@@ -809,6 +848,45 @@ bool http_conn::process_write(HTTP_CODE ret)
                 return false;
         }
     }
+    case LOGIN_SUCCESS:
+    {
+        // 创建session并设置cookie
+        string session_id = create_session(login_username, login_role);
+        
+        add_status_line(200, ok_200_title);
+        add_content_type();
+        add_cookie("session_id", session_id, SESSION_TIMEOUT);
+        
+        if (m_file_stat.st_size != 0)
+        {
+            add_headers(m_file_stat.st_size);
+            m_iv[0].iov_base = m_write_buf;
+            m_iv[0].iov_len = m_write_idx;
+            m_iv[1].iov_base = m_file_address;
+            m_iv[1].iov_len = m_file_stat.st_size;
+            m_iv_count = 2;
+            bytes_to_send = m_write_idx + m_file_stat.st_size;
+            
+            // 清理登录信息
+            login_username.clear();
+            login_role.clear();
+            
+            return true;
+        }
+        else
+        {
+            const char *ok_string = "<html><body></body></html>";
+            add_headers(strlen(ok_string));
+            if (!add_content(ok_string)) {
+                login_username.clear();
+                login_role.clear();
+                return false;
+            }
+            login_username.clear();
+            login_role.clear();
+        }
+        break;
+    }
     default:
         return false;
     }
@@ -832,4 +910,164 @@ void http_conn::process()
         close_conn();
     }
     modfd(m_epollfd, m_sockfd, EPOLLOUT, m_TRIGMode);
+}
+
+// Session管理功能实现
+string http_conn::create_session(const string& username, const string& role) {
+    // 生成session ID
+    static random_device rd;
+    static mt19937 gen(rd());
+    static uniform_int_distribution<> dis(0, 15);
+    
+    string session_id = "";
+    for (int i = 0; i < 32; i++) {
+        int hex_val = dis(gen);
+        if (hex_val < 10) {
+            session_id += char('0' + hex_val);
+        } else {
+            session_id += char('a' + hex_val - 10);
+        }
+    }
+    
+    // 存储session
+    session_lock.lock();
+    sessions[session_id] = UserSession(username, role);
+    session_lock.unlock();
+    
+    return session_id;
+}
+
+bool http_conn::validate_session(const string& session_id) {
+    if (session_id.empty()) return false;
+    
+    session_lock.lock();
+    auto it = sessions.find(session_id);
+    if (it != sessions.end()) {
+        // 检查是否过期
+        time_t now = time(nullptr);
+        if (now - it->second.last_access > SESSION_TIMEOUT) {
+            sessions.erase(it);
+            session_lock.unlock();
+            return false;
+        }
+        // 更新最后访问时间
+        it->second.last_access = now;
+        session_lock.unlock();
+        return true;
+    }
+    session_lock.unlock();
+    return false;
+}
+
+UserSession* http_conn::get_session(const string& session_id) {
+    if (!validate_session(session_id)) return nullptr;
+    
+    session_lock.lock();
+    auto it = sessions.find(session_id);
+    UserSession* session = (it != sessions.end()) ? &it->second : nullptr;
+    session_lock.unlock();
+    
+    return session;
+}
+
+void http_conn::destroy_session(const string& session_id) {
+    session_lock.lock();
+    sessions.erase(session_id);
+    session_lock.unlock();
+}
+
+void http_conn::cleanup_expired_sessions() {
+    time_t now = time(nullptr);
+    session_lock.lock();
+    
+    auto it = sessions.begin();
+    while (it != sessions.end()) {
+        if (now - it->second.last_access > SESSION_TIMEOUT) {
+            it = sessions.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    
+    session_lock.unlock();
+}
+
+string http_conn::get_session_from_cookie(const string& cookie_header) {
+    if (cookie_header.empty()) return "";
+    
+    // 查找 session_id=xxx 格式
+    size_t pos = cookie_header.find("session_id=");
+    if (pos == string::npos) return "";
+    
+    pos += 11; // strlen("session_id=")
+    size_t end_pos = cookie_header.find(";", pos);
+    if (end_pos == string::npos) {
+        end_pos = cookie_header.length();
+    }
+    
+    return cookie_header.substr(pos, end_pos - pos);
+}
+
+string http_conn::get_session_username(const string& session_id) {
+    UserSession* session = get_session(session_id);
+    return session ? session->username : "";
+}
+
+string http_conn::get_session_role(const string& session_id) {
+    UserSession* session = get_session(session_id);
+    return session ? session->role : "guest";
+}
+
+// 密码加密功能实现
+string http_conn::generate_salt(int length) {
+    static const char charset[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    static random_device rd;
+    static mt19937 gen(rd());
+    static uniform_int_distribution<> dis(0, sizeof(charset) - 2);
+    
+    string salt;
+    for (int i = 0; i < length; i++) {
+        salt += charset[dis(gen)];
+    }
+    return salt;
+}
+
+string http_conn::hash_password(const string& password, const string& salt) {
+    string salted_password = salt + password;
+    
+    unsigned char hash[SHA256_DIGEST_LENGTH];
+    SHA256((unsigned char*)salted_password.c_str(), salted_password.length(), hash);
+    
+    stringstream ss;
+    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+        ss << hex << setw(2) << setfill('0') << (int)hash[i];
+    }
+    
+    // 返回格式：salt$hash
+    return salt + "$" + ss.str();
+}
+
+bool http_conn::verify_password(const string& password, const string& stored_hash) {
+    // 如果stored_hash不包含$，说明是旧的明文密码，直接比较
+    size_t dollar_pos = stored_hash.find('$');
+    if (dollar_pos == string::npos) {
+        // 明文比较（兼容旧密码）
+        return password == stored_hash;
+    }
+    
+    // 提取salt
+    string salt = stored_hash.substr(0, dollar_pos);
+    
+    // 计算password的hash
+    string computed_hash = hash_password(password, salt);
+    
+    return computed_hash == stored_hash;
+}
+
+string http_conn::extract_salt_from_hash(const string& stored_hash) {
+    size_t dollar_pos = stored_hash.find('$');
+    if (dollar_pos == string::npos) {
+        return ""; // 明文密码没有salt
+    }
+    return stored_hash.substr(0, dollar_pos);
 }

@@ -26,6 +26,26 @@
 #include "../timer/lst_timer.h"
 #include "../log/log.h"
 #include "../blog/blog_handler.h"
+#include <unordered_map>
+#include <random>
+#include <openssl/sha.h>
+#include <iomanip>
+#include <sstream>
+
+// Session信息结构
+struct UserSession {
+    string username;
+    string role;
+    time_t created_at;
+    time_t last_access;
+    
+    UserSession() : created_at(0), last_access(0) {}
+    UserSession(const string& user, const string& user_role) 
+        : username(user), role(user_role) {
+        created_at = time(nullptr);
+        last_access = created_at;
+    }
+};
 
 class http_conn
 {
@@ -59,6 +79,7 @@ public:
         NO_RESOURCE,
         FORBIDDEN_REQUEST,
         FILE_REQUEST,
+        LOGIN_SUCCESS,
         INTERNAL_ERROR,
         CLOSED_CONNECTION
     };
@@ -85,6 +106,23 @@ public:
     }
     void initmysql_result(connection_pool *connPool);
     static void init_blog_handler(connection_pool *connPool);
+    
+    // Session管理功能
+    static string create_session(const string& username, const string& role);
+    static bool validate_session(const string& session_id);
+    static UserSession* get_session(const string& session_id);
+    static void destroy_session(const string& session_id);
+    static void cleanup_expired_sessions();
+    static string get_session_from_cookie(const string& cookie_header);
+    static string get_session_username(const string& session_id);
+    static string get_session_role(const string& session_id);
+    
+    // 密码加密功能
+    static string generate_salt(int length = 16);
+    static string hash_password(const string& password, const string& salt);
+    static bool verify_password(const string& password, const string& stored_hash);
+    static string extract_salt_from_hash(const string& stored_hash);
+    
     int timer_flag;
     int improv;
 
@@ -108,6 +146,7 @@ private:
     bool add_content_length(int content_length);
     bool add_linger();
     bool add_blank_line();
+    bool add_cookie(const string& name, const string& value, int max_age = 3600);
 
 public:
     static int m_epollfd;
@@ -130,6 +169,7 @@ private:
     char *m_url;
     char *m_version;
     char *m_host;
+    char *m_cookie;
     long m_content_length;
     bool m_linger;
     char *m_file_address;
@@ -150,7 +190,16 @@ private:
     char sql_passwd[100];
     char sql_name[100];
     
+    // 登录成功时的用户信息
+    string login_username;
+    string login_role;
+    
     static BlogHandler* blog_handler;
+    
+    // Session存储 - 静态成员
+    static unordered_map<string, UserSession> sessions;
+    static locker session_lock;
+    static const int SESSION_TIMEOUT = 3600; // 1小时超时
 };
 
 #endif

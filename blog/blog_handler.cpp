@@ -4,28 +4,22 @@
 #include <ctime>
 #include <random>
 
-BlogHandler::BlogHandler() : m_conn_pool(nullptr), template_engine(nullptr) {
+// 静态函数指针定义
+bool (*BlogHandler::validate_session_func)(const string& session_id) = nullptr;
+string (*BlogHandler::get_username_func)(const string& session_id) = nullptr;
+string (*BlogHandler::get_role_func)(const string& session_id) = nullptr;
+
+BlogHandler::BlogHandler() : m_conn_pool(nullptr) {
 }
 
 BlogHandler::~BlogHandler() {
-    if (template_engine) {
-        delete template_engine;
-    }
 }
 
 void BlogHandler::init(connection_pool* conn_pool) {
     m_conn_pool = conn_pool;
-    
-    // 初始化模板引擎
-    template_engine = new TemplateEngine();
-    template_engine->set_template_root("./templates/");
-    
-    // 设置全局变量
-    template_engine->set_variable("site_title", "TinyWebServer博客");
-    template_engine->set_variable("site_description", "基于C++的高性能Web服务器博客系统");
 }
 
-string BlogHandler::handle_request(const string& method, const string& url, const string& post_data, const string& client_ip) {
+string BlogHandler::handle_request(const string& method, const string& url, const string& post_data, const string& client_ip, const string& cookie_header) {
     if (!is_blog_route(url)) {
         return "";
     }
@@ -39,7 +33,6 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
         }
     }
     
-    printf("Blog request: %s %s (actual method: %s)\n", method.c_str(), url.c_str(), actual_method.c_str());
     
     try {
         // 路由分发
@@ -67,12 +60,24 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
             }
         }
         else if (url == "/blog/admin/" || url == "/blog/admin") {
+            // 检查管理员权限
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_error_response(403, "需要管理员权限访问");
+            }
             return render_admin_dashboard();
         }
         else if (url == "/blog/admin/new") {
+            // 检查管理员权限
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_error_response(403, "需要管理员权限访问");
+            }
             return render_admin_editor();
         }
         else if (url.find("/blog/admin/edit/") == 0) {
+            // 检查管理员权限
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_error_response(403, "需要管理员权限访问");
+            }
             string article_id_str = extract_route_param(url, "/blog/admin/edit/");
             int article_id = atoi(article_id_str.c_str());
             if (article_id > 0) {
@@ -84,6 +89,10 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
             if (actual_method == "GET") {
                 return api_get_articles();
             } else if (actual_method == "POST") {
+                // 创建文章需要管理员权限
+                if (!check_user_permission(cookie_header, "admin")) {
+                    return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+                }
                 return api_create_article(post_data);
             }
         }
@@ -94,8 +103,16 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
                 if (actual_method == "GET") {
                     return api_get_article(article_id);
                 } else if (actual_method == "PUT") {
+                    // 更新文章需要管理员权限
+                    if (!check_user_permission(cookie_header, "admin")) {
+                        return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+                    }
                     return api_update_article(article_id, post_data);
                 } else if (actual_method == "DELETE") {
+                    // 删除文章需要管理员权限
+                    if (!check_user_permission(cookie_header, "admin")) {
+                        return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+                    }
                     return api_delete_article(article_id);
                 }
             }
@@ -110,7 +127,6 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
         return build_error_response(404, "Page not found");
     }
     catch (const exception& e) {
-        printf("Blog handler error: %s\n", e.what());
         return build_error_response(500, "Internal server error");
     }
 }
@@ -119,7 +135,7 @@ string BlogHandler::render_blog_index(int page) {
     vector<Article> articles = get_articles_list(page);
     vector<Category> categories = get_categories();
     
-    // 直接生成HTML，避免模板引擎的编码问题
+    // 直接生成HTML，统一现代化风格
     stringstream html;
     html << "<!DOCTYPE html>\n";
     html << "<html lang=\"zh-CN\">\n";
@@ -127,11 +143,45 @@ string BlogHandler::render_blog_index(int page) {
     html << "<meta charset=\"UTF-8\">\n";
     html << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     html << "<title>TinyWebServer博客</title>\n";
-    html << "<link rel=\"stylesheet\" href=\"/static/css/main.css\">\n";
+    html << "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n";
+    html << "<style>\n";
+    html << "* { margin: 0; padding: 0; box-sizing: border-box; }\n";
+    html << "body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }\n";
+    html << ".blog-container { max-width: 1200px; margin: 0 auto; }\n";
+    html << ".header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 40px; text-align: center; margin-bottom: 30px; }\n";
+    html << ".header h1 { font-size: 32px; font-weight: 700; color: #2d3748; margin-bottom: 12px; letter-spacing: -0.5px; }\n";
+    html << ".header p { color: #718096; font-size: 16px; font-weight: 400; margin-bottom: 20px; }\n";
+    html << ".nav { display: flex; gap: 15px; justify-content: center; }\n";
+    html << ".btn { display: inline-flex; align-items: center; padding: 12px 24px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.3s ease; border: none; cursor: pointer; }\n";
+    html << ".btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }\n";
+    html << ".btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3); }\n";
+    html << ".btn-secondary { background: linear-gradient(135deg, #4299e1, #3182ce); }\n";
+    html << ".main-content { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }\n";
+    html << ".content { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; }\n";
+    html << ".sidebar { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; height: fit-content; }\n";
+    html << ".article { margin-bottom: 30px; padding-bottom: 30px; border-bottom: 1px solid #e2e8f0; }\n";
+    html << ".article:last-child { border-bottom: none; }\n";
+    html << ".article-title { font-size: 24px; font-weight: 600; color: #2d3748; margin-bottom: 15px; }\n";
+    html << ".article-title a { color: #2d3748; text-decoration: none; transition: color 0.3s ease; }\n";
+    html << ".article-title a:hover { color: #667eea; }\n";
+    html << ".article-meta { display: flex; gap: 20px; font-size: 14px; color: #718096; margin-bottom: 15px; flex-wrap: wrap; }\n";
+    html << ".article-summary { color: #4a5568; line-height: 1.6; margin-bottom: 15px; }\n";
+    html << ".article-actions { margin-top: 15px; }\n";
+    html << ".widget { margin-bottom: 30px; }\n";
+    html << ".widget h3 { font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 15px; }\n";
+    html << ".category-list { list-style: none; }\n";
+    html << ".category-list li { margin-bottom: 8px; }\n";
+    html << ".category-list a { color: #4a5568; text-decoration: none; display: flex; justify-content: space-between; padding: 8px 12px; border-radius: 8px; transition: all 0.3s ease; }\n";
+    html << ".category-list a:hover { background: #f7fafc; color: #667eea; }\n";
+    html << ".count { background: #e2e8f0; color: #4a5568; padding: 2px 8px; border-radius: 12px; font-size: 12px; }\n";
+    html << ".no-content { text-align: center; padding: 60px 20px; color: #718096; }\n";
+    html << ".no-content h3 { font-size: 20px; margin-bottom: 10px; color: #4a5568; }\n";
+    html << "@media (max-width: 768px) { .main-content { grid-template-columns: 1fr; } .header { padding: 30px 20px; } .header h1 { font-size: 24px; } .content, .sidebar { padding: 20px; } }\n";
+    html << "</style>\n";
     html << "</head>\n";
     html << "<body>\n";
+    html << "<div class=\"blog-container\">\n";
     
-    html << "<div class=\"container\">\n";
     html << "<div class=\"header\">\n";
     html << "<h1>TinyWebServer博客</h1>\n";
     html << "<p>基于C++的高性能Web服务器博客系统</p>\n";
@@ -189,9 +239,8 @@ string BlogHandler::render_blog_index(int page) {
     html << "</aside>\n";
     
     html << "</div>\n"; // main-content
-    html << "</div>\n"; // container
+    html << "</div>\n"; // blog-container
     
-    html << "<script src=\"/static/js/main.js\"></script>\n";
     html << "</body>\n";
     html << "</html>\n";
     
@@ -211,31 +260,38 @@ string BlogHandler::render_article_detail(int article_id) {
     
     stringstream html;
     html << "<!DOCTYPE html>\n";
-    html << "<html>\n<head>\n";
-    html << "<meta charset=\"utf-8\">\n";
+    html << "<html lang=\"zh-CN\">\n<head>\n";
+    html << "<meta charset=\"UTF-8\">\n";
+    html << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     html << "<title>" << html_escape(article.title) << " - TinyWebServer博客</title>\n";
+    html << "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n";
     html << "<style>\n";
-    html << "body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }\n";
-    html << ".container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }\n";
-    html << ".article-title { color: #2c3e50; margin-bottom: 15px; }\n";
-    html << ".article-meta { color: #666; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; }\n";
-    html << ".article-content { line-height: 1.8; color: #333; margin-bottom: 40px; white-space: pre-wrap; }\n";
+    html << "* { margin: 0; padding: 0; box-sizing: border-box; }\n";
+    html << "body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }\n";
+    html << ".container { max-width: 900px; margin: 0 auto; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 40px; }\n";
+    html << ".article-title { font-size: 28px; font-weight: 700; color: #2d3748; margin-bottom: 20px; line-height: 1.2; }\n";
+    html << ".article-meta { color: #718096; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #e2e8f0; font-size: 14px; }\n";
+    html << ".article-content { line-height: 1.8; color: #4a5568; margin-bottom: 40px; white-space: pre-wrap; font-size: 16px; }\n";
     html << ".comments { margin-top: 40px; }\n";
-    html << ".comment { background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 5px; border-left: 3px solid #3498db; }\n";
-    html << ".comment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }\n";
-    html << ".comment-author { font-weight: bold; color: #2c3e50; }\n";
-    html << ".comment-time { color: #666; font-size: 12px; }\n";
-    html << ".comment-content { margin: 10px 0; line-height: 1.6; }\n";
-    html << ".comment-likes { color: #e74c3c; font-size: 12px; margin-top: 5px; }\n";
-    html << ".no-comments { text-align: center; color: #666; padding: 30px; background: #f8f9fa; border-radius: 5px; margin: 20px 0; }\n";
-    html << ".back-link { display: inline-block; margin-bottom: 20px; color: #3498db; text-decoration: none; }\n";
-    html << ".back-link:hover { text-decoration: underline; }\n";
-    html << ".comment-form { background: #f8f9fa; padding: 20px; border-radius: 5px; margin-top: 30px; }\n";
-    html << ".form-group { margin-bottom: 15px; }\n";
-    html << ".form-group label { display: block; margin-bottom: 5px; font-weight: bold; }\n";
-    html << ".form-group input, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 3px; }\n";
-    html << ".btn { background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 3px; cursor: pointer; }\n";
-    html << ".btn:hover { background: #2980b9; }\n";
+    html << ".comments h3 { font-size: 20px; font-weight: 600; color: #2d3748; margin-bottom: 20px; }\n";
+    html << ".comment { background: rgba(248, 250, 252, 0.8); padding: 20px; margin: 20px 0; border-radius: 12px; border-left: 4px solid #667eea; backdrop-filter: blur(5px); }\n";
+    html << ".comment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }\n";
+    html << ".comment-author { font-weight: 600; color: #2d3748; }\n";
+    html << ".comment-time { color: #718096; font-size: 12px; }\n";
+    html << ".comment-content { margin: 12px 0; line-height: 1.6; color: #4a5568; }\n";
+    html << ".comment-likes { color: #667eea; font-size: 12px; margin-top: 8px; }\n";
+    html << ".no-comments { text-align: center; color: #718096; padding: 40px; background: rgba(248, 250, 252, 0.5); border-radius: 12px; margin: 20px 0; }\n";
+    html << ".back-link { display: inline-flex; align-items: center; margin-bottom: 20px; color: #667eea; text-decoration: none; font-weight: 500; padding: 8px 16px; border-radius: 8px; transition: all 0.3s ease; }\n";
+    html << ".back-link:hover { background: rgba(102, 126, 234, 0.1); transform: translateX(-5px); }\n";
+    html << ".comment-form { background: rgba(248, 250, 252, 0.6); padding: 30px; border-radius: 16px; margin-top: 30px; backdrop-filter: blur(5px); }\n";
+    html << ".comment-form h3 { font-size: 18px; font-weight: 600; color: #2d3748; margin-bottom: 20px; }\n";
+    html << ".form-group { margin-bottom: 20px; }\n";
+    html << ".form-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #4a5568; }\n";
+    html << ".form-group input, .form-group textarea { width: 100%; padding: 12px 16px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 14px; transition: all 0.3s ease; font-family: inherit; }\n";
+    html << ".form-group input:focus, .form-group textarea:focus { outline: none; border-color: #667eea; box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1); }\n";
+    html << ".btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 12px 24px; border: none; border-radius: 25px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.3s ease; }\n";
+    html << ".btn:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3); }\n";
+    html << "@media (max-width: 768px) { .container { padding: 30px 20px; } .article-title { font-size: 24px; } }\n";
     html << "</style>\n";
     html << "</head>\n<body>\n";
     
@@ -371,7 +427,7 @@ string BlogHandler::render_admin_dashboard() {
         }
     }
     
-    // 直接生成HTML
+    // 直接生成HTML，统一现代化风格
     stringstream html;
     html << "<!DOCTYPE html>\n";
     html << "<html lang=\"zh-CN\">\n";
@@ -379,21 +435,56 @@ string BlogHandler::render_admin_dashboard() {
     html << "<meta charset=\"UTF-8\">\n";
     html << "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n";
     html << "<title>管理后台 - TinyWebServer博客</title>\n";
-    html << "<link rel=\"stylesheet\" href=\"/static/css/main.css\">\n";
-    html << "<link rel=\"stylesheet\" href=\"/static/css/admin.css\">\n";
+    html << "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n";
+    html << "<style>\n";
+    html << "* { margin: 0; padding: 0; box-sizing: border-box; }\n";
+    html << "body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }\n";
+    html << ".container { max-width: 1200px; margin: 0 auto; }\n";
+    html << ".admin-header { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; margin-bottom: 30px; text-align: center; }\n";
+    html << ".admin-header h1 { font-size: 28px; font-weight: 700; color: #2d3748; margin-bottom: 15px; }\n";
+    html << ".admin-nav { display: flex; gap: 15px; justify-content: center; margin-top: 20px; }\n";
+    html << ".admin-nav a { color: #667eea; text-decoration: none; padding: 8px 16px; border-radius: 8px; transition: all 0.3s ease; font-weight: 500; }\n";
+    html << ".admin-nav a:hover { background: rgba(102, 126, 234, 0.1); }\n";
+    html << ".stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }\n";
+    html << ".stat-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 16px; padding: 25px; text-align: center; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); }\n";
+    html << ".stat-card h3 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }\n";
+    html << ".stat-card p { color: #718096; font-size: 14px; font-weight: 500; }\n";
+    html << ".stat-card.primary h3 { color: #667eea; }\n";
+    html << ".stat-card.success h3 { color: #48bb78; }\n";
+    html << ".stat-card.warning h3 { color: #ed8936; }\n";
+    html << ".stat-card.danger h3 { color: #f56565; }\n";
+    html << ".admin-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-radius: 20px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); padding: 30px; }\n";
+    html << ".panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }\n";
+    html << ".panel-header h2 { font-size: 20px; font-weight: 600; color: #2d3748; }\n";
+    html << ".btn { display: inline-flex; align-items: center; padding: 10px 20px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 14px; transition: all 0.3s ease; border: none; cursor: pointer; }\n";
+    html << ".btn-success { background: linear-gradient(135deg, #48bb78, #38a169); color: white; }\n";
+    html << ".btn-success:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(72, 187, 120, 0.3); }\n";
+    html << ".btn-sm { padding: 6px 12px; font-size: 12px; }\n";
+    html << ".btn-secondary { background: linear-gradient(135deg, #4299e1, #3182ce); color: white; }\n";
+    html << ".btn-danger { background: linear-gradient(135deg, #f56565, #e53e3e); color: white; }\n";
+    html << ".table { width: 100%; border-collapse: collapse; }\n";
+    html << ".table th, .table td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }\n";
+    html << ".table th { font-weight: 600; color: #4a5568; background: rgba(248, 250, 252, 0.5); }\n";
+    html << ".table td { color: #2d3748; }\n";
+    html << ".status { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; }\n";
+    html << ".status-published { background: #c6f6d5; color: #22543d; }\n";
+    html << ".status-draft { background: #fed7cc; color: #c05621; }\n";
+    html << ".actions { display: flex; gap: 8px; }\n";
+    html << ".no-content { text-align: center; padding: 60px 20px; color: #718096; }\n";
+    html << ".no-content h3 { font-size: 18px; margin-bottom: 10px; color: #4a5568; }\n";
+    html << "@media (max-width: 768px) { .stats-grid { grid-template-columns: 1fr; } .admin-header { padding: 25px 20px; } .admin-panel { padding: 25px 20px; } .panel-header { flex-direction: column; gap: 15px; text-align: center; } }\n";
+    html << "</style>\n";
     html << "</head>\n";
     html << "<body>\n";
     
     html << "<div class=\"container\">\n";
     html << "<div class=\"admin-header\">\n";
-    html << "<div class=\"container\">\n";
     html << "<h1>管理后台</h1>\n";
     html << "<nav class=\"admin-nav\">\n";
     html << "<a href=\"/blog/admin/\">仪表盘</a>\n";
     html << "<a href=\"/blog/admin/new\">新建文章</a>\n";
     html << "<a href=\"/blog/\">返回前台</a>\n";
     html << "</nav>\n";
-    html << "</div>\n";
     html << "</div>\n";
     
     // 统计卡片
@@ -619,7 +710,6 @@ vector<Comment> BlogHandler::get_article_comments(int article_id) {
 vector<Category> BlogHandler::get_categories() {
     vector<Category> categories;
     if (!m_conn_pool) {
-        printf("Error: No connection pool available\n");
         return categories;
     }
     
@@ -627,7 +717,6 @@ vector<Category> BlogHandler::get_categories() {
     connectionRAII mysqlcon(&mysql, m_conn_pool);
     
     if (!mysql) {
-        printf("Error: Failed to get MySQL connection\n");
         return categories;
     }
     
@@ -644,17 +733,13 @@ vector<Category> BlogHandler::get_categories() {
                 category.description = row[2] ? row[2] : "";
                 category.article_count = atoi(row[3] ? row[3] : "0");
                 categories.push_back(category);
-                printf("Loaded category: ID=%d, Name=%s\n", category.category_id, category.name.c_str());
             }
             mysql_free_result(result);
         } else {
-            printf("Error: No result from query\n");
         }
     } else {
-        printf("MySQL Error: %s\n", mysql_error(mysql));
     }
     
-    printf("Total categories loaded: %zu\n", categories.size());
     return categories;
 }
 
@@ -750,14 +835,8 @@ string BlogHandler::html_escape(const string& str) {
 }
 
 string BlogHandler::build_html_response(const string& html_content, int status_code) {
-    stringstream response;
-    response << "HTTP/1.1 " << status_code << " OK\r\n";
-    response << "Content-Type: text/html; charset=utf-8\r\n";
-    response << "Content-Length: " << html_content.size() << "\r\n";
-    response << "Connection: close\r\n";
-    response << "\r\n";
-    response << html_content;
-    return response.str();
+    // 只返回HTML内容，HTTP头部由主服务器处理
+    return html_content;
 }
 
 string BlogHandler::build_error_response(int status_code, const string& message) {
@@ -1176,23 +1255,19 @@ string BlogHandler::api_create_article(const string& post_data) {
     query << "1, "; // 默认作者ID为1
     query << "NOW())";
     
-    printf("Executing SQL: %s\n", query.str().c_str());
     
     if (mysql_query(mysql, query.str().c_str()) == 0) {
         int article_id = mysql_insert_id(mysql);
-        printf("Article created successfully with ID: %d\n", article_id);
         
         // 更新发布时间
         if (status == "published") {
             stringstream update_query;
             update_query << "UPDATE articles SET published_at = NOW() WHERE article_id = " << article_id;
             mysql_query(mysql, update_query.str().c_str());
-            printf("Published_at updated for article %d\n", article_id);
         }
         
         stringstream response;
         response << "{\"success\":true,\"message\":\"文章创建成功\",\"article_id\":" << article_id << "}";
-        printf("Returning success response: %s\n", response.str().c_str());
         return build_json_response(response.str());
     } else {
         printf("SQL Error: %s\n", mysql_error(mysql));
@@ -1239,17 +1314,13 @@ string BlogHandler::api_update_article(int article_id, const string& post_data) 
     
     query << " WHERE article_id = " << article_id;
     
-    printf("Executing UPDATE SQL: %s\n", query.str().c_str());
     
     if (mysql_query(mysql, query.str().c_str()) == 0) {
         int affected_rows = mysql_affected_rows(mysql);
-        printf("Article update affected %d rows\n", affected_rows);
         
         if (affected_rows > 0) {
-            printf("Returning update success response\n");
             return build_json_response("{\"success\":true,\"message\":\"文章更新成功\"}");
         } else {
-            printf("No rows affected - article not found\n");
             return build_json_response("{\"success\":false,\"message\":\"文章不存在\"}", 404);
         }
     } else {
@@ -1269,17 +1340,13 @@ string BlogHandler::api_delete_article(int article_id) {
     stringstream query;
     query << "DELETE FROM articles WHERE article_id = " << article_id;
     
-    printf("Executing DELETE SQL: %s\n", query.str().c_str());
     
     if (mysql_query(mysql, query.str().c_str()) == 0) {
         int affected_rows = mysql_affected_rows(mysql);
-        printf("Article delete affected %d rows\n", affected_rows);
         
         if (affected_rows > 0) {
-            printf("Returning delete success response\n");
             return build_json_response("{\"success\":true,\"message\":\"文章删除成功\"}");
         } else {
-            printf("No rows affected - article not found\n");
             return build_json_response("{\"success\":false,\"message\":\"文章不存在\"}", 404);
         }
     } else {
@@ -1340,8 +1407,6 @@ string BlogHandler::api_add_comment(const string& post_data) {
     }
 }
 string BlogHandler::api_toggle_like(const string& post_data) { return ""; }
-bool BlogHandler::is_admin_session(const string& session_id) { return true; }
-string BlogHandler::create_admin_session(const string& username) { return ""; }
 vector<Tag> BlogHandler::get_tags() { return vector<Tag>(); }
 string BlogHandler::parse_url_param(const string& url, const string& param) {
     size_t question_pos = url.find('?');
@@ -1429,7 +1494,74 @@ map<string, string> BlogHandler::parse_post_data(const string& data) {
 }
 string BlogHandler::build_json_response(const string& json_data, int status_code) {
     string result = json_data;
-    printf("Returning JSON data only: %s\n", result.c_str());
     return result;
 }
 string BlogHandler::generate_session_id() { return ""; }
+
+// Session验证功能实现
+void BlogHandler::set_session_functions(bool (*validate_func)(const string&), 
+                                       string (*username_func)(const string&),
+                                       string (*role_func)(const string&)) {
+    validate_session_func = validate_func;
+    get_username_func = username_func;
+    get_role_func = role_func;
+}
+
+string BlogHandler::extract_session_id(const string& cookie_header) {
+    if (cookie_header.empty()) return "";
+    
+    // 查找 session_id=xxx 格式
+    size_t pos = cookie_header.find("session_id=");
+    if (pos == string::npos) return "";
+    
+    pos += 11; // strlen("session_id=")
+    size_t end_pos = cookie_header.find(";", pos);
+    if (end_pos == string::npos) {
+        end_pos = cookie_header.length();
+    }
+    
+    return cookie_header.substr(pos, end_pos - pos);
+}
+
+bool BlogHandler::is_logged_in(const string& cookie_header) {
+    if (!validate_session_func) return false;
+    
+    string session_id = extract_session_id(cookie_header);
+    return validate_session_func(session_id);
+}
+
+string BlogHandler::get_current_user(const string& cookie_header) {
+    if (!get_username_func) return "";
+    
+    string session_id = extract_session_id(cookie_header);
+    return get_username_func(session_id);
+}
+
+string BlogHandler::get_user_role(const string& cookie_header) {
+    if (!get_role_func) return "guest";
+    
+    string session_id = extract_session_id(cookie_header);
+    return get_role_func(session_id);
+}
+
+bool BlogHandler::is_admin_user(const string& cookie_header) {
+    return get_user_role(cookie_header) == "admin";
+}
+
+bool BlogHandler::check_user_permission(const string& cookie_header, const string& required_role) {
+    if (required_role == "guest") {
+        return true; // guest权限不需要登录
+    }
+    
+    if (!is_logged_in(cookie_header)) {
+        return false;
+    }
+    
+    string user_role = get_user_role(cookie_header);
+    
+    if (required_role == "admin") {
+        return user_role == "admin";
+    }
+    
+    return true; // 其他情况默认允许
+}
