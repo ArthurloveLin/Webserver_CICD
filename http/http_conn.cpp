@@ -855,7 +855,7 @@ bool http_conn::process_write(HTTP_CODE ret)
         
         add_status_line(200, ok_200_title);
         add_content_type();
-        add_cookie("session_id", session_id, SESSION_TIMEOUT);
+        add_cookie("session_id", session_id, UserSession::SESSION_TIMEOUT);
         
         if (m_file_stat.st_size != 0)
         {
@@ -944,14 +944,13 @@ bool http_conn::validate_session(const string& session_id) {
     auto it = sessions.find(session_id);
     if (it != sessions.end()) {
         // 检查是否过期
-        time_t now = time(nullptr);
-        if (now - it->second.last_access > SESSION_TIMEOUT) {
+        if (it->second.is_expired()) {
             sessions.erase(it);
             session_lock.unlock();
             return false;
         }
         // 更新最后访问时间
-        it->second.last_access = now;
+        it->second.update_access_time();
         session_lock.unlock();
         return true;
     }
@@ -977,19 +976,25 @@ void http_conn::destroy_session(const string& session_id) {
 }
 
 void http_conn::cleanup_expired_sessions() {
-    time_t now = time(nullptr);
     session_lock.lock();
     
     auto it = sessions.begin();
+    int removed_count = 0;
     while (it != sessions.end()) {
-        if (now - it->second.last_access > SESSION_TIMEOUT) {
+        if (it->second.is_expired()) {
             it = sessions.erase(it);
+            removed_count++;
         } else {
             ++it;
         }
     }
     
     session_lock.unlock();
+    
+    if (removed_count > 0) {
+        // 使用printf代替LOG_INFO，因为在静态函数中无法访问m_close_log
+        printf("Cleaned up %d expired sessions\n", removed_count);
+    }
 }
 
 string http_conn::get_session_from_cookie(const string& cookie_header) {

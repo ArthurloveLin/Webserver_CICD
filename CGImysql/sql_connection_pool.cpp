@@ -42,13 +42,28 @@ void connection_pool::init(string url, string User, string PassWord, string DBNa
 			LOG_ERROR("MySQL Error");
 			exit(1);
 		}
+		
+		// 设置MySQL连接选项
+		mysql_options(con, MYSQL_SET_CHARSET_NAME, "utf8mb4");
+		
+		// 设置连接超时和读写超时
+		unsigned int timeout = 3600; // 1小时
+		mysql_options(con, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
+		mysql_options(con, MYSQL_OPT_READ_TIMEOUT, &timeout);
+		mysql_options(con, MYSQL_OPT_WRITE_TIMEOUT, &timeout);
+		
 		con = mysql_real_connect(con, url.c_str(), User.c_str(), PassWord.c_str(), DBName.c_str(), Port, NULL, 0);
 
 		if (con == NULL)
 		{
-			LOG_ERROR("MySQL Error");
+			LOG_ERROR("MySQL Error: %s", mysql_error(con));
 			exit(1);
 		}
+		
+		// 连接成功后设置session级别的wait_timeout
+		mysql_query(con, "SET SESSION wait_timeout = 7200"); // 2小时
+		mysql_query(con, "SET SESSION interactive_timeout = 7200"); // 2小时
+		
 		connList.push_back(con);
 		++m_FreeConn;
 	}
@@ -73,6 +88,50 @@ MYSQL *connection_pool::GetConnection()
 
 	con = connList.front();
 	connList.pop_front();
+	
+	// 检查连接是否有效，如果断开则重新连接
+	if (mysql_ping(con) != 0)
+	{
+		LOG_ERROR("MySQL connection lost, attempting to reconnect...");
+		mysql_close(con);
+		
+		// 重新创建连接
+		con = mysql_init(con);
+		if (con != NULL)
+		{
+			// 重新设置连接选项
+			mysql_options(con, MYSQL_SET_CHARSET_NAME, "utf8mb4");
+			
+			unsigned int timeout = 3600;
+			mysql_options(con, MYSQL_OPT_CONNECT_TIMEOUT, &timeout);
+			mysql_options(con, MYSQL_OPT_READ_TIMEOUT, &timeout);
+			mysql_options(con, MYSQL_OPT_WRITE_TIMEOUT, &timeout);
+			
+			con = mysql_real_connect(con, m_url.c_str(), m_User.c_str(), m_PassWord.c_str(), 
+									m_DatabaseName.c_str(), atoi(m_Port.c_str()), NULL, 0);
+			
+			if (con != NULL)
+			{
+				mysql_query(con, "SET SESSION wait_timeout = 7200");
+				mysql_query(con, "SET SESSION interactive_timeout = 7200");
+				printf("MySQL connection restored successfully\n");
+			}
+			else
+			{
+				LOG_ERROR("Failed to restore MySQL connection: %s", mysql_error(con));
+				lock.unlock();
+				reserve.post();
+				return NULL;
+			}
+		}
+		else
+		{
+			LOG_ERROR("Failed to initialize MySQL connection");
+			lock.unlock();
+			reserve.post();
+			return NULL;
+		}
+	}
 
 	--m_FreeConn;
 	++m_CurConn;

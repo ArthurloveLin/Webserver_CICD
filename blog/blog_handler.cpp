@@ -186,7 +186,7 @@ string BlogHandler::render_blog_index(int page) {
     html << "<h1>TinyWebServer博客</h1>\n";
     html << "<p>基于C++的高性能Web服务器博客系统</p>\n";
     html << "<div class=\"nav\">\n";
-    html << "<a href=\"/blog/\" class=\"btn\">首页</a>\n";
+    html << "<a href=\"/welcome.html\" class=\"btn\">首页</a>\n";
     html << "<a href=\"/blog/admin/\" class=\"btn btn-secondary\">管理后台</a>\n";
     html << "</div>\n";
     html << "</div>\n";
@@ -296,7 +296,7 @@ string BlogHandler::render_article_detail(int article_id) {
     html << "</head>\n<body>\n";
     
     html << "<div class=\"container\">\n";
-    html << "<a href=\"/blog/\" class=\"back-link\">← 返回首页</a>\n";
+    html << "<a href=\"/welcome.html\" class=\"back-link\">← 返回首页</a>\n";
     html << "<h1 class=\"article-title\">" << html_escape(article.title) << "</h1>\n";
     html << "<div class=\"article-meta\">\n";
     html << "发布时间: " << article.created_at << " | ";
@@ -843,7 +843,7 @@ string BlogHandler::build_error_response(int status_code, const string& message)
     stringstream html;
     html << "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>错误</title></head>";
     html << "<body><h1>错误 " << status_code << "</h1><p>" << html_escape(message) << "</p>";
-    html << "<a href=\"/blog/\">返回首页</a></body></html>";
+    html << "<a href=\"/welcome.html\">返回首页</a></body></html>";
     return build_html_response(html.str(), status_code);
 }
 
@@ -922,7 +922,7 @@ string BlogHandler::render_category_page(int category_id, int page) {
     
     // 面包屑导航
     html << "<div class=\"breadcrumb\">\n";
-    html << "<a href=\"/blog/\">首页</a> > 分类 > " << html_escape(category.name) << "\n";
+    html << "<a href=\"/welcome.html\">首页</a> > 分类 > " << html_escape(category.name) << "\n";
     html << "</div>\n";
     
     html << "<div class=\"main-content\">\n";
@@ -933,7 +933,7 @@ string BlogHandler::render_category_page(int category_id, int page) {
         html << "<div class=\"no-content\">\n";
         html << "<h3>暂无文章</h3>\n";
         html << "<p>该分类下还没有已发布的文章。</p>\n";
-        html << "<a href=\"/blog/\" class=\"btn\">返回首页</a>\n";
+        html << "<a href=\"/welcome.html\" class=\"btn\">返回首页</a>\n";
         html << "</div>\n";
     } else {
         for (const auto& article : articles) {

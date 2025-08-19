@@ -39,11 +39,21 @@ struct UserSession {
     time_t created_at;
     time_t last_access;
     
+    static const time_t SESSION_TIMEOUT = 7200; // 2小时超时
+    
     UserSession() : created_at(0), last_access(0) {}
     UserSession(const string& user, const string& user_role) 
         : username(user), role(user_role) {
         created_at = time(nullptr);
         last_access = created_at;
+    }
+    
+    bool is_expired() const {
+        return (time(nullptr) - last_access) > SESSION_TIMEOUT;
+    }
+    
+    void update_access_time() {
+        last_access = time(nullptr);
     }
 };
 
@@ -199,7 +209,6 @@ private:
     // Session存储 - 静态成员
     static unordered_map<string, UserSession> sessions;
     static locker session_lock;
-    static const int SESSION_TIMEOUT = 3600; // 1小时超时
 };
 
 #endif
