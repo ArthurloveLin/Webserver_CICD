@@ -7,6 +7,8 @@
 #include <mysql/mysql.h>
 #include "../CGImysql/sql_connection_pool.h"
 #include "../log/log.h"
+#include "markdown_parser.h"
+#include "image_uploader.h"
 
 using namespace std;
 
@@ -14,6 +16,7 @@ struct Article {
     int article_id;
     string title;
     string content;
+    string content_type; // 新增：内容类型 ("html" 或 "markdown")
     string summary;
     int author_id;
     int category_id;
@@ -79,6 +82,11 @@ public:
     string api_add_comment(const string& post_data);
     string api_toggle_like(const string& post_data);
     
+    // Markdown和图片处理
+    string api_upload_image(const string& content_type, const string& post_data);
+    string render_content(const string& content, const string& content_type);
+    
+    
     // 用户权限验证  
     bool check_user_permission(const string& cookie_header, const string& required_role = "guest");
     string get_current_user(const string& cookie_header);
@@ -101,6 +109,8 @@ public:
     
 private:
     connection_pool* m_conn_pool;
+    MarkdownParser* markdown_parser;
+    ImageUploader* image_uploader;
     
     // 数据库操作方法
     vector<Article> get_articles_list(int page = 1, int limit = 10, int category_id = 0, const string& status = "published");
@@ -131,6 +141,7 @@ private:
     // Session管理（简单实现）
     map<string, string> admin_sessions;
     string generate_session_id();
+    
 };
 
 #endif

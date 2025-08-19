@@ -142,6 +142,25 @@ string BlogHandler::handle_request(const string& method, const string& url, cons
             }
             return api_upload_image("multipart/form-data", post_data);
         }
+        // 分块上传API
+        else if (url == "/blog/api/chunk/start" && actual_method == "POST") {
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+            }
+            return api_start_chunk_upload(post_data);
+        }
+        else if (url == "/blog/api/chunk/upload" && actual_method == "POST") {
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+            }
+            return api_upload_chunk(post_data);
+        }
+        else if (url == "/blog/api/chunk/finish" && actual_method == "POST") {
+            if (!check_user_permission(cookie_header, "admin")) {
+                return build_json_response("{\"success\":false,\"message\":\"需要管理员权限\"}", 403);
+            }
+            return api_finish_chunk_upload(post_data);
+        }
         
         return build_error_response(404, "Page not found");
     }
@@ -1507,6 +1526,86 @@ string BlogHandler::render_admin_editor(int article_id) {
     
     // JavaScript
     html << "<script>\n";
+    html << "// 分块上传函数\n";
+    html << "async function uploadArticleInChunks(formData, method, articleId) {\n";
+    html << "    console.log('分块上传开始，articleId:', articleId);\n";
+    html << "    const CHUNK_SIZE = 1500;\n";
+    html << "    const content = formData.get('content') || '';\n";
+    html << "    const totalChunks = Math.ceil(content.length / CHUNK_SIZE);\n";
+    html << "    \n";
+    html << "    console.log('内容长度:', content.length, '分块数量:', totalChunks);\n";
+    html << "    \n";
+    html << "    try {\n";
+    html << "        // 1. 开始分块上传\n";
+    html << "        const startParams = new URLSearchParams();\n";
+    html << "        startParams.append('title', formData.get('title') || '');\n";
+    html << "        startParams.append('content_type', formData.get('content_type') || 'markdown');\n";
+    html << "        startParams.append('summary', formData.get('summary') || '');\n";
+    html << "        startParams.append('category_id', formData.get('category_id') || '');\n";
+    html << "        startParams.append('status', formData.get('status') || 'draft');\n";
+    html << "        \n";
+    html << "        const startResponse = await fetch('/blog/api/chunk/start', {\n";
+    html << "            method: 'POST',\n";
+    html << "            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+    html << "            body: startParams.toString()\n";
+    html << "        });\n";
+    html << "        \n";
+    html << "        const startResult = await startResponse.json();\n";
+    html << "        if (!startResult.success) {\n";
+    html << "            throw new Error(startResult.message);\n";
+    html << "        }\n";
+    html << "        \n";
+    html << "        const uploadId = startResult.upload_id;\n";
+    html << "        \n";
+    html << "        // 2. 分块上传内容\n";
+    html << "        for (let i = 0; i < totalChunks; i++) {\n";
+    html << "            const start = i * CHUNK_SIZE;\n";
+    html << "            const end = Math.min(start + CHUNK_SIZE, content.length);\n";
+    html << "            const chunk = content.slice(start, end);\n";
+    html << "            \n";
+    html << "            const chunkParams = new URLSearchParams();\n";
+    html << "            chunkParams.append('upload_id', uploadId);\n";
+    html << "            chunkParams.append('chunk_data', chunk);\n";
+    html << "            \n";
+    html << "            const chunkResponse = await fetch('/blog/api/chunk/upload', {\n";
+    html << "                method: 'POST',\n";
+    html << "                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+    html << "                body: chunkParams.toString()\n";
+    html << "            });\n";
+    html << "            \n";
+    html << "            const chunkResult = await chunkResponse.json();\n";
+    html << "            if (!chunkResult.success) {\n";
+    html << "                throw new Error(chunkResult.message);\n";
+    html << "            }\n";
+    html << "            \n";
+    html << "            // 更新进度\n";
+    html << "            const submitBtn = document.querySelector('button[type=\"submit\"]');\n";
+    html << "            const progress = Math.round(((i + 1) / totalChunks) * 100);\n";
+    html << "            submitBtn.textContent = '上传中 ' + progress + '%';\n";
+    html << "        }\n";
+    html << "        \n";
+    html << "        // 3. 完成上传\n";
+    html << "        const finishParams = new URLSearchParams();\n";
+    html << "        finishParams.append('upload_id', uploadId);\n";
+    html << "        if (articleId > 0) {\n";
+    html << "            finishParams.append('article_id', articleId.toString());\n";
+    html << "        }\n";
+    html << "        \n";
+    html << "        const finishResponse = await fetch('/blog/api/chunk/finish', {\n";
+    html << "            method: 'POST',\n";
+    html << "            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n";
+    html << "            body: finishParams.toString()\n";
+    html << "        });\n";
+    html << "        \n";
+    html << "        const finishResult = await finishResponse.json();\n";
+    html << "        return finishResult;\n";
+    html << "        \n";
+    html << "    } catch (error) {\n";
+    html << "        console.error('分块上传失败:', error);\n";
+    html << "        throw error;\n";
+    html << "    }\n";
+    html << "}\n";
+    html << "\n";
     html << "document.getElementById('article-form').addEventListener('submit', function(e) {\n";
     html << "    e.preventDefault();\n";
     html << "    \n";
@@ -1520,34 +1619,46 @@ string BlogHandler::render_admin_editor(int article_id) {
     html << "    submitBtn.textContent = '保存中...';\n";
     html << "    submitBtn.disabled = true;\n";
     html << "    \n";
-    html << "    // 将FormData转换为URLSearchParams以便正确发送\n";
-    html << "    const params = new URLSearchParams();\n";
-    html << "    for (const [key, value] of formData.entries()) {\n";
-    html << "        if (key !== '_method') {\n";
-    html << "            params.append(key, value);\n";
+    html << "    // 检查内容长度，决定使用普通提交还是分块上传\n";
+    html << "    const content = formData.get('content') || '';\n";
+    html << "    const CHUNK_SIZE = 1500; // 1.5KB 分块大小，小于2KB缓冲区限制\n";
+    html << "    \n";
+    html << "    console.log('Content length:', content.length, 'CHUNK_SIZE:', CHUNK_SIZE);\n";
+    html << "    \n";
+    html << "    let uploadPromise;\n";
+    html << "    \n";
+    html << "    if (content.length <= CHUNK_SIZE) {\n";
+    html << "        console.log('使用普通提交');\n";
+    html << "        // 内容较短，使用普通提交\n";
+    html << "        const params = new URLSearchParams();\n";
+    html << "        for (const [key, value] of formData.entries()) {\n";
+    html << "            if (key !== '_method') {\n";
+    html << "                params.append(key, value);\n";
+    html << "            }\n";
     html << "        }\n";
+    html << "        \n";
+    html << "        uploadPromise = fetch(url, {\n";
+    html << "            method: method,\n";
+    html << "            headers: {\n";
+    html << "                'Content-Type': 'application/x-www-form-urlencoded'\n";
+    html << "            },\n";
+    html << "            body: params.toString()\n";
+    html << "        }).then(response => {\n";
+    html << "            return response.text().then(text => {\n";
+    html << "                try {\n";
+    html << "                    return JSON.parse(text);\n";
+    html << "                } catch (e) {\n";
+    html << "                    throw new Error('Invalid JSON response: ' + text);\n";
+    html << "                }\n";
+    html << "            });\n";
+    html << "        });\n";
+    html << "    } else {\n";
+    html << "        console.log('使用分块上传');\n";
+    html << "        // 内容较长，使用分块上传\n";
+    html << "        uploadPromise = uploadArticleInChunks(formData, method, url.includes('/edit/') ? parseInt(url.split('/').pop()) : 0);\n";
     html << "    }\n";
     html << "    \n";
-    html << "    fetch(url, {\n";
-    html << "        method: method,\n";
-    html << "        headers: {\n";
-    html << "            'Content-Type': 'application/x-www-form-urlencoded'\n";
-    html << "        },\n";
-    html << "        body: params.toString()\n";
-    html << "    })\n";
-    html << "    .then(response => {\n";
-    html << "        console.log('Response status:', response.status);\n";
-    html << "        console.log('Response headers:', response.headers);\n";
-    html << "        return response.text().then(text => {\n";
-    html << "            console.log('Response text:', text);\n";
-    html << "            try {\n";
-    html << "                return JSON.parse(text);\n";
-    html << "            } catch (e) {\n";
-    html << "                console.error('JSON parse error:', e);\n";
-    html << "                throw new Error('Invalid JSON response: ' + text);\n";
-    html << "            }\n";
-    html << "        });\n";
-    html << "    })\n";
+    html << "    uploadPromise\n";
     html << "    .then(data => {\n";
     html << "        console.log('Parsed data:', data);\n";
     html << "        if (data.success) {\n";
@@ -1834,7 +1945,7 @@ string BlogHandler::api_create_article(const string& post_data) {
 }
 string BlogHandler::api_update_article(int article_id, const string& post_data) {
     printf("Debug: api_update_article called, article_id: %d\n", article_id);
-    printf("Debug: post_data: %s\n", post_data.c_str());
+    printf("Debug: post_data length: %zu\n", post_data.length());
     
     if (!m_conn_pool) {
         printf("Debug: 数据库连接池为空\n");
@@ -1845,55 +1956,121 @@ string BlogHandler::api_update_article(int article_id, const string& post_data) 
     map<string, string> form_data = parse_post_data(post_data);
     printf("Debug: 解析到的字段数量: %zu\n", form_data.size());
     
+    for (const auto& pair : form_data) {
+        printf("Debug: 字段 %s = %s (长度: %zu)\n", pair.first.c_str(), 
+               pair.second.substr(0, 100).c_str(), pair.second.length());
+    }
+    
     // 验证必需字段
     if (form_data["title"].empty() || form_data["content"].empty()) {
-        printf("Debug: 必需字段为空\n");
+        printf("Debug: 必需字段为空 - title: %s, content: %s\n", 
+               form_data["title"].empty() ? "empty" : "not empty",
+               form_data["content"].empty() ? "empty" : "not empty");
         return build_json_response("{\"success\":false,\"message\":\"标题和内容不能为空\"}", 400);
     }
     
     MYSQL* mysql = nullptr;
     connectionRAII mysqlcon(&mysql, m_conn_pool);
     
-    // 暂时使用简单SQL
-    stringstream query;
-    query << "UPDATE articles SET ";
-    query << "title = '" << html_escape(form_data["title"]) << "', ";
-    query << "content = '" << html_escape(form_data["content"]) << "', ";
-    query << "content_type = '" << (form_data["content_type"].empty() ? "markdown" : form_data["content_type"]) << "', ";
-    query << "summary = '" << html_escape(form_data["summary"]) << "', ";
-    
-    if (!form_data["category_id"].empty() && form_data["category_id"] != "0") {
-        query << "category_id = " << form_data["category_id"] << ", ";
-    } else {
-        query << "category_id = NULL, ";
-    }
-    
     string status = form_data["status"].empty() ? "draft" : form_data["status"];
-    query << "status = '" << status << "', ";
-    query << "updated_at = NOW()";
     
-    if (status == "published") {
-        query << ", published_at = COALESCE(published_at, NOW())";
+    // 使用预处理语句防止SQL注入和处理长文本
+    const char* sql = status == "published" ? 
+        "UPDATE articles SET title=?, content=?, content_type=?, summary=?, category_id=?, status=?, updated_at=NOW(), published_at=COALESCE(published_at, NOW()) WHERE article_id=?" :
+        "UPDATE articles SET title=?, content=?, content_type=?, summary=?, category_id=?, status=?, updated_at=NOW() WHERE article_id=?";
+        
+    MYSQL_STMT* stmt = mysql_stmt_init(mysql);
+    
+    if (!stmt) {
+        printf("mysql_stmt_init() failed\n");
+        return build_json_response("{\"success\":false,\"message\":\"数据库预处理失败\"}", 500);
     }
     
-    query << " WHERE article_id = " << article_id;
+    if (mysql_stmt_prepare(stmt, sql, strlen(sql))) {
+        printf("mysql_stmt_prepare() failed: %s\n", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"SQL预处理失败\"}", 500);
+    }
     
-    printf("Debug: 执行SQL\n");
+    // 绑定参数
+    MYSQL_BIND bind[7];
+    memset(bind, 0, sizeof(bind));
     
-    if (mysql_query(mysql, query.str().c_str()) == 0) {
-        int affected_rows = mysql_affected_rows(mysql);
-        printf("Debug: SQL执行成功，影响行数: %d\n", affected_rows);
-        
-        if (affected_rows > 0) {
-            printf("Debug: 文章更新成功\n");
-            return build_json_response("{\"success\":true,\"message\":\"文章更新成功\"}");
-        } else {
-            printf("Debug: 没有找到要更新的文章\n");
-            return build_json_response("{\"success\":false,\"message\":\"文章不存在\"}", 404);
-        }
+    string title = form_data["title"];
+    string content = form_data["content"];
+    string content_type = form_data["content_type"].empty() ? "markdown" : form_data["content_type"];
+    string summary = form_data["summary"];
+    int category_id = form_data["category_id"].empty() || form_data["category_id"] == "0" ? 0 : atoi(form_data["category_id"].c_str());
+    
+    unsigned long title_length = title.length();
+    unsigned long content_length = content.length();
+    unsigned long content_type_length = content_type.length();
+    unsigned long summary_length = summary.length();
+    unsigned long status_length = status.length();
+    
+    // title
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (char*)title.c_str();
+    bind[0].buffer_length = title_length;
+    bind[0].length = &title_length;
+    
+    // content
+    bind[1].buffer_type = MYSQL_TYPE_LONG_BLOB;
+    bind[1].buffer = (char*)content.c_str();
+    bind[1].buffer_length = content_length;
+    bind[1].length = &content_length;
+    
+    // content_type
+    bind[2].buffer_type = MYSQL_TYPE_STRING;
+    bind[2].buffer = (char*)content_type.c_str();
+    bind[2].buffer_length = content_type_length;
+    bind[2].length = &content_type_length;
+    
+    // summary
+    bind[3].buffer_type = MYSQL_TYPE_STRING;
+    bind[3].buffer = (char*)summary.c_str();
+    bind[3].buffer_length = summary_length;
+    bind[3].length = &summary_length;
+    
+    // category_id
+    bind[4].buffer_type = MYSQL_TYPE_LONG;
+    bind[4].buffer = &category_id;
+    bool category_is_null = (category_id == 0);
+    bind[4].is_null = category_is_null ? &category_is_null : 0;
+    
+    // status
+    bind[5].buffer_type = MYSQL_TYPE_STRING;
+    bind[5].buffer = (char*)status.c_str();
+    bind[5].buffer_length = status_length;
+    bind[5].length = &status_length;
+    
+    // article_id
+    bind[6].buffer_type = MYSQL_TYPE_LONG;
+    bind[6].buffer = &article_id;
+    
+    if (mysql_stmt_bind_param(stmt, bind)) {
+        printf("mysql_stmt_bind_param() failed: %s\n", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"参数绑定失败\"}", 500);
+    }
+    
+    printf("Debug: 准备执行SQL语句\n");
+    if (mysql_stmt_execute(stmt)) {
+        printf("mysql_stmt_execute() failed: %s\n", mysql_stmt_error(stmt));
+        mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"文章更新失败\"}", 500);
+    }
+    
+    int affected_rows = mysql_stmt_affected_rows(stmt);
+    printf("Debug: SQL执行成功，影响行数: %d\n", affected_rows);
+    mysql_stmt_close(stmt);
+    
+    if (affected_rows > 0) {
+        printf("Debug: 文章更新成功\n");
+        return build_json_response("{\"success\":true,\"message\":\"文章更新成功\"}");
     } else {
-        printf("SQL Error: %s\n", mysql_error(mysql));
-        return build_json_response("{\"success\":false,\"message\":\"数据库操作失败\"}", 500);
+        printf("Debug: 没有找到要更新的文章\n");
+        return build_json_response("{\"success\":false,\"message\":\"文章不存在\"}", 404);
     }
 }
 string BlogHandler::api_delete_article(int article_id) {
@@ -2066,6 +2243,261 @@ string BlogHandler::build_json_response(const string& json_data, int status_code
 }
 string BlogHandler::generate_session_id() { return ""; }
 
+string BlogHandler::generate_upload_id() {
+    auto now = chrono::system_clock::now();
+    auto timestamp = chrono::duration_cast<chrono::milliseconds>(now.time_since_epoch()).count();
+    return "upload_" + to_string(timestamp);
+}
+
+// 开始分块上传
+string BlogHandler::api_start_chunk_upload(const string& post_data) {
+    map<string, string> form_data = parse_post_data(post_data);
+    
+    string upload_id = generate_upload_id();
+    ChunkUpload chunk_upload;
+    chunk_upload.upload_id = upload_id;
+    chunk_upload.title = form_data["title"];
+    chunk_upload.content_type = form_data["content_type"].empty() ? "markdown" : form_data["content_type"];
+    chunk_upload.summary = form_data["summary"];
+    chunk_upload.category_id = form_data["category_id"];
+    chunk_upload.status = form_data["status"].empty() ? "draft" : form_data["status"];
+    chunk_upload.content = "";
+    chunk_upload.is_complete = false;
+    chunk_upload.last_chunk_time = to_string(time(nullptr));
+    
+    chunk_uploads[upload_id] = chunk_upload;
+    
+    stringstream response;
+    response << "{\"success\":true,\"upload_id\":\"" << upload_id << "\"}";
+    return build_json_response(response.str());
+}
+
+// 上传分块
+string BlogHandler::api_upload_chunk(const string& post_data) {
+    map<string, string> form_data = parse_post_data(post_data);
+    
+    string upload_id = form_data["upload_id"];
+    string chunk_data = form_data["chunk_data"];
+    
+    if (chunk_uploads.find(upload_id) == chunk_uploads.end()) {
+        return build_json_response("{\"success\":false,\"message\":\"无效的上传ID\"}", 400);
+    }
+    
+    // 追加分块数据
+    chunk_uploads[upload_id].content += chunk_data;
+    chunk_uploads[upload_id].last_chunk_time = to_string(time(nullptr));
+    
+    return build_json_response("{\"success\":true,\"message\":\"分块上传成功\"}");
+}
+
+// 完成分块上传
+string BlogHandler::api_finish_chunk_upload(const string& post_data) {
+    map<string, string> form_data = parse_post_data(post_data);
+    string upload_id = form_data["upload_id"];
+    int article_id = form_data["article_id"].empty() ? 0 : atoi(form_data["article_id"].c_str());
+    
+    if (chunk_uploads.find(upload_id) == chunk_uploads.end()) {
+        return build_json_response("{\"success\":false,\"message\":\"无效的上传ID\"}", 400);
+    }
+    
+    ChunkUpload& chunk_upload = chunk_uploads[upload_id];
+    
+    // 验证必需字段
+    if (chunk_upload.title.empty() || chunk_upload.content.empty()) {
+        chunk_uploads.erase(upload_id);
+        return build_json_response("{\"success\":false,\"message\":\"标题和内容不能为空\"}", 400);
+    }
+    
+    string result;
+    if (article_id > 0) {
+        // 更新现有文章
+        result = update_article_with_chunk_data(article_id, chunk_upload);
+    } else {
+        // 创建新文章
+        result = create_article_with_chunk_data(chunk_upload);
+    }
+    
+    // 清理临时数据
+    chunk_uploads.erase(upload_id);
+    
+    return result;
+}
+
+// 使用分块数据创建文章
+string BlogHandler::create_article_with_chunk_data(const ChunkUpload& chunk_upload) {
+    if (!m_conn_pool) {
+        return build_json_response("{\"success\":false,\"message\":\"数据库连接失败\"}", 500);
+    }
+    
+    MYSQL* mysql = nullptr;
+    connectionRAII mysqlcon(&mysql, m_conn_pool);
+    
+    // 使用预处理语句
+    const char* sql = "INSERT INTO articles (title, content, content_type, summary, category_id, status, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW())";
+    MYSQL_STMT* stmt = mysql_stmt_init(mysql);
+    
+    if (!stmt || mysql_stmt_prepare(stmt, sql, strlen(sql))) {
+        if (stmt) mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"数据库预处理失败\"}", 500);
+    }
+    
+    // 绑定参数
+    MYSQL_BIND bind[7];
+    memset(bind, 0, sizeof(bind));
+    
+    string title = chunk_upload.title;
+    string content = chunk_upload.content;
+    string content_type = chunk_upload.content_type;
+    string summary = chunk_upload.summary;
+    string status = chunk_upload.status;
+    int category_id = chunk_upload.category_id.empty() || chunk_upload.category_id == "0" ? 0 : atoi(chunk_upload.category_id.c_str());
+    int author_id = 1;
+    
+    unsigned long title_length = title.length();
+    unsigned long content_length = content.length();
+    unsigned long content_type_length = content_type.length();
+    unsigned long summary_length = summary.length();
+    unsigned long status_length = status.length();
+    
+    // 绑定参数
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (char*)title.c_str();
+    bind[0].buffer_length = title_length;
+    bind[0].length = &title_length;
+    
+    bind[1].buffer_type = MYSQL_TYPE_LONG_BLOB;
+    bind[1].buffer = (char*)content.c_str();
+    bind[1].buffer_length = content_length;
+    bind[1].length = &content_length;
+    
+    bind[2].buffer_type = MYSQL_TYPE_STRING;
+    bind[2].buffer = (char*)content_type.c_str();
+    bind[2].buffer_length = content_type_length;
+    bind[2].length = &content_type_length;
+    
+    bind[3].buffer_type = MYSQL_TYPE_STRING;
+    bind[3].buffer = (char*)summary.c_str();
+    bind[3].buffer_length = summary_length;
+    bind[3].length = &summary_length;
+    
+    bind[4].buffer_type = MYSQL_TYPE_LONG;
+    bind[4].buffer = &category_id;
+    bool category_is_null = (category_id == 0);
+    bind[4].is_null = category_is_null ? &category_is_null : 0;
+    
+    bind[5].buffer_type = MYSQL_TYPE_STRING;
+    bind[5].buffer = (char*)status.c_str();
+    bind[5].buffer_length = status_length;
+    bind[5].length = &status_length;
+    
+    bind[6].buffer_type = MYSQL_TYPE_LONG;
+    bind[6].buffer = &author_id;
+    
+    if (mysql_stmt_bind_param(stmt, bind) || mysql_stmt_execute(stmt)) {
+        mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"文章创建失败\"}", 500);
+    }
+    
+    int article_id = mysql_stmt_insert_id(stmt);
+    mysql_stmt_close(stmt);
+    
+    // 更新发布时间
+    if (status == "published") {
+        stringstream update_query;
+        update_query << "UPDATE articles SET published_at = NOW() WHERE article_id = " << article_id;
+        mysql_query(mysql, update_query.str().c_str());
+    }
+    
+    stringstream response;
+    response << "{\"success\":true,\"message\":\"文章创建成功\",\"article_id\":" << article_id << "}";
+    return build_json_response(response.str());
+}
+
+// 使用分块数据更新文章
+string BlogHandler::update_article_with_chunk_data(int article_id, const ChunkUpload& chunk_upload) {
+    if (!m_conn_pool) {
+        return build_json_response("{\"success\":false,\"message\":\"数据库连接失败\"}", 500);
+    }
+    
+    MYSQL* mysql = nullptr;
+    connectionRAII mysqlcon(&mysql, m_conn_pool);
+    
+    string status = chunk_upload.status;
+    const char* sql = status == "published" ? 
+        "UPDATE articles SET title=?, content=?, content_type=?, summary=?, category_id=?, status=?, updated_at=NOW(), published_at=COALESCE(published_at, NOW()) WHERE article_id=?" :
+        "UPDATE articles SET title=?, content=?, content_type=?, summary=?, category_id=?, status=?, updated_at=NOW() WHERE article_id=?";
+        
+    MYSQL_STMT* stmt = mysql_stmt_init(mysql);
+    
+    if (!stmt || mysql_stmt_prepare(stmt, sql, strlen(sql))) {
+        if (stmt) mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"数据库预处理失败\"}", 500);
+    }
+    
+    // 绑定参数（与创建类似，但多了article_id）
+    MYSQL_BIND bind[7];
+    memset(bind, 0, sizeof(bind));
+    
+    string title = chunk_upload.title;
+    string content = chunk_upload.content;
+    string content_type = chunk_upload.content_type;
+    string summary = chunk_upload.summary;
+    int category_id = chunk_upload.category_id.empty() || chunk_upload.category_id == "0" ? 0 : atoi(chunk_upload.category_id.c_str());
+    
+    unsigned long title_length = title.length();
+    unsigned long content_length = content.length();
+    unsigned long content_type_length = content_type.length();
+    unsigned long summary_length = summary.length();
+    unsigned long status_length = status.length();
+    
+    // 参数绑定（前6个与创建相同）
+    bind[0].buffer_type = MYSQL_TYPE_STRING;
+    bind[0].buffer = (char*)title.c_str();
+    bind[0].buffer_length = title_length;
+    bind[0].length = &title_length;
+    
+    bind[1].buffer_type = MYSQL_TYPE_LONG_BLOB;
+    bind[1].buffer = (char*)content.c_str();
+    bind[1].buffer_length = content_length;
+    bind[1].length = &content_length;
+    
+    bind[2].buffer_type = MYSQL_TYPE_STRING;
+    bind[2].buffer = (char*)content_type.c_str();
+    bind[2].buffer_length = content_type_length;
+    bind[2].length = &content_type_length;
+    
+    bind[3].buffer_type = MYSQL_TYPE_STRING;
+    bind[3].buffer = (char*)summary.c_str();
+    bind[3].buffer_length = summary_length;
+    bind[3].length = &summary_length;
+    
+    bind[4].buffer_type = MYSQL_TYPE_LONG;
+    bind[4].buffer = &category_id;
+    bool category_is_null = (category_id == 0);
+    bind[4].is_null = category_is_null ? &category_is_null : 0;
+    
+    bind[5].buffer_type = MYSQL_TYPE_STRING;
+    bind[5].buffer = (char*)status.c_str();
+    bind[5].buffer_length = status_length;
+    bind[5].length = &status_length;
+    
+    bind[6].buffer_type = MYSQL_TYPE_LONG;
+    bind[6].buffer = &article_id;
+    
+    if (mysql_stmt_bind_param(stmt, bind) || mysql_stmt_execute(stmt)) {
+        mysql_stmt_close(stmt);
+        return build_json_response("{\"success\":false,\"message\":\"文章更新失败\"}", 500);
+    }
+    
+    int affected_rows = mysql_stmt_affected_rows(stmt);
+    mysql_stmt_close(stmt);
+    
+    if (affected_rows > 0) {
+        return build_json_response("{\"success\":true,\"message\":\"文章更新成功\"}");
+    } else {
+        return build_json_response("{\"success\":false,\"message\":\"文章不存在\"}", 404);
+    }
+}
 
 // Session验证功能实现
 void BlogHandler::set_session_functions(bool (*validate_func)(const string&), 
