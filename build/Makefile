@@ -65,6 +65,16 @@ CMAKE_BINARY_DIR = /home/arthur/Public/TinyWebServer/build
 #=============================================================================
 # Targets provided globally by CMake.
 
+# Special rule for the target test
+test:
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running tests..."
+	/usr/bin/ctest --force-new-ctest-process $(ARGS)
+.PHONY : test
+
+# Special rule for the target test
+test/fast: test
+.PHONY : test/fast
+
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "No interactive CMake dialog available..."
@@ -129,12 +139,26 @@ server/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/build
 .PHONY : server/fast
 
+#=============================================================================
+# Target rules for targets named tests
+
+# Build rule for target.
+tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 tests
+.PHONY : tests
+
+# fast build rule for target.
+tests/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/build
+.PHONY : tests/fast
+
 CGImysql/sql_connection_pool.o: CGImysql/sql_connection_pool.cpp.o
 .PHONY : CGImysql/sql_connection_pool.o
 
 # target to build an object file
 CGImysql/sql_connection_pool.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/CGImysql/sql_connection_pool.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/CGImysql/sql_connection_pool.cpp.o
 .PHONY : CGImysql/sql_connection_pool.cpp.o
 
 CGImysql/sql_connection_pool.i: CGImysql/sql_connection_pool.cpp.i
@@ -143,6 +167,7 @@ CGImysql/sql_connection_pool.i: CGImysql/sql_connection_pool.cpp.i
 # target to preprocess a source file
 CGImysql/sql_connection_pool.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/CGImysql/sql_connection_pool.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/CGImysql/sql_connection_pool.cpp.i
 .PHONY : CGImysql/sql_connection_pool.cpp.i
 
 CGImysql/sql_connection_pool.s: CGImysql/sql_connection_pool.cpp.s
@@ -151,6 +176,7 @@ CGImysql/sql_connection_pool.s: CGImysql/sql_connection_pool.cpp.s
 # target to generate assembly for a file
 CGImysql/sql_connection_pool.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/CGImysql/sql_connection_pool.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/CGImysql/sql_connection_pool.cpp.s
 .PHONY : CGImysql/sql_connection_pool.cpp.s
 
 blog/blog_handler.o: blog/blog_handler.cpp.o
@@ -159,6 +185,7 @@ blog/blog_handler.o: blog/blog_handler.cpp.o
 # target to build an object file
 blog/blog_handler.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/blog_handler.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/blog_handler.cpp.o
 .PHONY : blog/blog_handler.cpp.o
 
 blog/blog_handler.i: blog/blog_handler.cpp.i
@@ -167,6 +194,7 @@ blog/blog_handler.i: blog/blog_handler.cpp.i
 # target to preprocess a source file
 blog/blog_handler.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/blog_handler.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/blog_handler.cpp.i
 .PHONY : blog/blog_handler.cpp.i
 
 blog/blog_handler.s: blog/blog_handler.cpp.s
@@ -175,6 +203,7 @@ blog/blog_handler.s: blog/blog_handler.cpp.s
 # target to generate assembly for a file
 blog/blog_handler.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/blog_handler.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/blog_handler.cpp.s
 .PHONY : blog/blog_handler.cpp.s
 
 blog/image_uploader.o: blog/image_uploader.cpp.o
@@ -183,6 +212,7 @@ blog/image_uploader.o: blog/image_uploader.cpp.o
 # target to build an object file
 blog/image_uploader.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/image_uploader.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/image_uploader.cpp.o
 .PHONY : blog/image_uploader.cpp.o
 
 blog/image_uploader.i: blog/image_uploader.cpp.i
@@ -191,6 +221,7 @@ blog/image_uploader.i: blog/image_uploader.cpp.i
 # target to preprocess a source file
 blog/image_uploader.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/image_uploader.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/image_uploader.cpp.i
 .PHONY : blog/image_uploader.cpp.i
 
 blog/image_uploader.s: blog/image_uploader.cpp.s
@@ -199,6 +230,7 @@ blog/image_uploader.s: blog/image_uploader.cpp.s
 # target to generate assembly for a file
 blog/image_uploader.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/image_uploader.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/image_uploader.cpp.s
 .PHONY : blog/image_uploader.cpp.s
 
 blog/markdown_parser.o: blog/markdown_parser.cpp.o
@@ -207,6 +239,7 @@ blog/markdown_parser.o: blog/markdown_parser.cpp.o
 # target to build an object file
 blog/markdown_parser.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/markdown_parser.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/markdown_parser.cpp.o
 .PHONY : blog/markdown_parser.cpp.o
 
 blog/markdown_parser.i: blog/markdown_parser.cpp.i
@@ -215,6 +248,7 @@ blog/markdown_parser.i: blog/markdown_parser.cpp.i
 # target to preprocess a source file
 blog/markdown_parser.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/markdown_parser.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/markdown_parser.cpp.i
 .PHONY : blog/markdown_parser.cpp.i
 
 blog/markdown_parser.s: blog/markdown_parser.cpp.s
@@ -223,6 +257,7 @@ blog/markdown_parser.s: blog/markdown_parser.cpp.s
 # target to generate assembly for a file
 blog/markdown_parser.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/blog/markdown_parser.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/blog/markdown_parser.cpp.s
 .PHONY : blog/markdown_parser.cpp.s
 
 config.o: config.cpp.o
@@ -231,6 +266,7 @@ config.o: config.cpp.o
 # target to build an object file
 config.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/config.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/config.cpp.o
 .PHONY : config.cpp.o
 
 config.i: config.cpp.i
@@ -239,6 +275,7 @@ config.i: config.cpp.i
 # target to preprocess a source file
 config.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/config.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/config.cpp.i
 .PHONY : config.cpp.i
 
 config.s: config.cpp.s
@@ -247,6 +284,7 @@ config.s: config.cpp.s
 # target to generate assembly for a file
 config.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/config.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/config.cpp.s
 .PHONY : config.cpp.s
 
 http/http_conn.o: http/http_conn.cpp.o
@@ -255,6 +293,7 @@ http/http_conn.o: http/http_conn.cpp.o
 # target to build an object file
 http/http_conn.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/http/http_conn.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/http/http_conn.cpp.o
 .PHONY : http/http_conn.cpp.o
 
 http/http_conn.i: http/http_conn.cpp.i
@@ -263,6 +302,7 @@ http/http_conn.i: http/http_conn.cpp.i
 # target to preprocess a source file
 http/http_conn.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/http/http_conn.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/http/http_conn.cpp.i
 .PHONY : http/http_conn.cpp.i
 
 http/http_conn.s: http/http_conn.cpp.s
@@ -271,6 +311,7 @@ http/http_conn.s: http/http_conn.cpp.s
 # target to generate assembly for a file
 http/http_conn.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/http/http_conn.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/http/http_conn.cpp.s
 .PHONY : http/http_conn.cpp.s
 
 log/log.o: log/log.cpp.o
@@ -279,6 +320,7 @@ log/log.o: log/log.cpp.o
 # target to build an object file
 log/log.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/log/log.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/log/log.cpp.o
 .PHONY : log/log.cpp.o
 
 log/log.i: log/log.cpp.i
@@ -287,6 +329,7 @@ log/log.i: log/log.cpp.i
 # target to preprocess a source file
 log/log.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/log/log.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/log/log.cpp.i
 .PHONY : log/log.cpp.i
 
 log/log.s: log/log.cpp.s
@@ -295,6 +338,7 @@ log/log.s: log/log.cpp.s
 # target to generate assembly for a file
 log/log.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/log/log.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/log/log.cpp.s
 .PHONY : log/log.cpp.s
 
 main.o: main.cpp.o
@@ -321,12 +365,37 @@ main.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/main.cpp.s
 .PHONY : main.cpp.s
 
+tests/test_http.o: tests/test_http.cpp.o
+.PHONY : tests/test_http.o
+
+# target to build an object file
+tests/test_http.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/tests/test_http.cpp.o
+.PHONY : tests/test_http.cpp.o
+
+tests/test_http.i: tests/test_http.cpp.i
+.PHONY : tests/test_http.i
+
+# target to preprocess a source file
+tests/test_http.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/tests/test_http.cpp.i
+.PHONY : tests/test_http.cpp.i
+
+tests/test_http.s: tests/test_http.cpp.s
+.PHONY : tests/test_http.s
+
+# target to generate assembly for a file
+tests/test_http.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/tests/test_http.cpp.s
+.PHONY : tests/test_http.cpp.s
+
 timer/lst_timer.o: timer/lst_timer.cpp.o
 .PHONY : timer/lst_timer.o
 
 # target to build an object file
 timer/lst_timer.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/timer/lst_timer.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/timer/lst_timer.cpp.o
 .PHONY : timer/lst_timer.cpp.o
 
 timer/lst_timer.i: timer/lst_timer.cpp.i
@@ -335,6 +404,7 @@ timer/lst_timer.i: timer/lst_timer.cpp.i
 # target to preprocess a source file
 timer/lst_timer.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/timer/lst_timer.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/timer/lst_timer.cpp.i
 .PHONY : timer/lst_timer.cpp.i
 
 timer/lst_timer.s: timer/lst_timer.cpp.s
@@ -343,6 +413,7 @@ timer/lst_timer.s: timer/lst_timer.cpp.s
 # target to generate assembly for a file
 timer/lst_timer.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/timer/lst_timer.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/timer/lst_timer.cpp.s
 .PHONY : timer/lst_timer.cpp.s
 
 webserver.o: webserver.cpp.o
@@ -351,6 +422,7 @@ webserver.o: webserver.cpp.o
 # target to build an object file
 webserver.cpp.o:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/webserver.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/webserver.cpp.o
 .PHONY : webserver.cpp.o
 
 webserver.i: webserver.cpp.i
@@ -359,6 +431,7 @@ webserver.i: webserver.cpp.i
 # target to preprocess a source file
 webserver.cpp.i:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/webserver.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/webserver.cpp.i
 .PHONY : webserver.cpp.i
 
 webserver.s: webserver.cpp.s
@@ -367,6 +440,7 @@ webserver.s: webserver.cpp.s
 # target to generate assembly for a file
 webserver.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/server.dir/build.make CMakeFiles/server.dir/webserver.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/tests.dir/build.make CMakeFiles/tests.dir/webserver.cpp.s
 .PHONY : webserver.cpp.s
 
 # Help Target
@@ -377,7 +451,9 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... test"
 	@echo "... server"
+	@echo "... tests"
 	@echo "... CGImysql/sql_connection_pool.o"
 	@echo "... CGImysql/sql_connection_pool.i"
 	@echo "... CGImysql/sql_connection_pool.s"
@@ -402,6 +478,9 @@ help:
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"
+	@echo "... tests/test_http.o"
+	@echo "... tests/test_http.i"
+	@echo "... tests/test_http.s"
 	@echo "... timer/lst_timer.o"
 	@echo "... timer/lst_timer.i"
 	@echo "... timer/lst_timer.s"
