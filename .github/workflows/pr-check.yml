@@ -1,0 +1,167 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    types: [ opened, synchronize, reopened ]
+
+concurrency:
+  group: pr-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  # 快速构建检查
+  quick-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libmysqlclient-dev \
+          libssl-dev
+
+    - name: Quick build check
+      run: |
+        mkdir -p build
+        cd build
+        cmake ..
+        make server -j$(nproc)
+
+  # 代码格式检查
+  format-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install clang-format
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-format
+
+    - name: Check code formatting
+      run: |
+        echo "Checking C++ code formatting..."
+        CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(cpp|h)$' | tr '\n' ' ')
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "Checking files: $CHANGED_FILES"
+          clang-format --dry-run --Werror $CHANGED_FILES
+        else
+          echo "No C++ files changed"
+        fi
+
+  # 静态代码分析
+  static-analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install cppcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck
+
+    - name: Run static analysis
+      run: |
+        # 只分析变更的文件
+        CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep -E '\.(cpp|h)$' | tr '\n' ' ')
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "Analyzing files: $CHANGED_FILES"
+          cppcheck --enable=warning,style,performance \
+            --error-exitcode=0 \
+            --suppress=missingIncludeSystem \
+            --inline-suppr \
+            --std=c++11 \
+            $CHANGED_FILES
+        else
+          echo "No C++ files changed"
+        fi
+
+  # 检查提交消息格式
+  commit-message-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check commit messages
+      run: |
+        echo "Checking commit message format..."
+        git log --oneline origin/main..HEAD | while read commit; do
+          message=$(echo "$commit" | cut -d' ' -f2-)
+          echo "Checking: $message"
+          
+          # 基本格式检查：不应该只是一个词，应该有描述性
+          if [ ${#message} -lt 10 ]; then
+            echo "Warning: Commit message too short: $message"
+          fi
+          
+          # 检查是否包含中文（对于中文项目）
+          if echo "$message" | grep -q '[^\x00-\x7F]'; then
+            echo "Info: Commit message contains non-ASCII characters: $message"
+          fi
+        done
+
+  # 检查文件大小和二进制文件
+  file-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check file sizes
+      run: |
+        echo "Checking for large files..."
+        find . -type f -size +10M | while read file; do
+          echo "Large file detected: $file ($(du -h "$file" | cut -f1))"
+        done
+
+    - name: Check for unwanted files
+      run: |
+        echo "Checking for unwanted files..."
+        UNWANTED_PATTERNS="*.exe *.o *.so *.dylib .DS_Store Thumbs.db"
+        for pattern in $UNWANTED_PATTERNS; do
+          if find . -name "$pattern" | grep -q .; then
+            echo "Unwanted files found matching $pattern:"
+            find . -name "$pattern"
+          fi
+        done
+
+  # 许可证和版权检查
+  license-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Check license headers
+      run: |
+        echo "Checking for license headers in new files..."
+        CHANGED_FILES=$(git diff --name-only --diff-filter=A origin/main...HEAD | grep -E '\.(cpp|h)$')
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "New C++ files: $CHANGED_FILES"
+          for file in $CHANGED_FILES; do
+            if ! head -10 "$file" | grep -qi "copyright\|license"; then
+              echo "Warning: $file may be missing license header"
+            fi
+          done
+        else
+          echo "No new C++ files added"
+        fi

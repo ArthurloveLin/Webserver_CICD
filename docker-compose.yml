@@ -1,0 +1,54 @@
+services:
+  webserver:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    container_name: tinywebserver-simple
+    ports:
+      - "9006:9006"
+    environment:
+      - DB_HOST=mysql
+      - DB_USER=root
+      - DB_PASSWORD=webserver123
+      - DB_NAME=webserver
+    volumes:
+      - ./logs:/app/logs
+      - ./root/uploads:/app/root/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - webserver-network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: tinywebserver-mysql-simple
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=webserver123
+      - MYSQL_DATABASE=webserver
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - mysql_data_simple:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+      - ./docker/mysql/conf:/etc/mysql/conf.d
+    networks:
+      - webserver-network
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pwebserver123"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  webserver-network:
+    driver: bridge
+
+volumes:
+  mysql_data_simple:

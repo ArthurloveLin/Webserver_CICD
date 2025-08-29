@@ -1,0 +1,243 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  BINARY_NAME: tinywebserver
+
+jobs:
+  # 创建 GitHub Release
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create_release.outputs.id }}
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # 生成变更日志
+        if git tag | grep -q .; then
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            echo "## Changes since $LAST_TAG" > changelog.md
+            git log --pretty=format:"- %s (%h)" $LAST_TAG..HEAD >> changelog.md
+          else
+            echo "## Initial Release" > changelog.md
+            git log --pretty=format:"- %s (%h)" >> changelog.md
+          fi
+        else
+          echo "## Initial Release" > changelog.md
+          git log --pretty=format:"- %s (%h)" >> changelog.md
+        fi
+        
+        echo "" >> changelog.md
+        echo "## Docker Images" >> changelog.md
+        echo "- \`docker pull \${{ secrets.DOCKER_USERNAME }}/${{ env.BINARY_NAME }}:${{ steps.get_version.outputs.version }}\`" >> changelog.md
+        echo "- \`docker pull ghcr.io/\${{ github.repository_owner }}/${{ env.BINARY_NAME }}:${{ steps.get_version.outputs.version }}\`" >> changelog.md
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        release_name: Release ${{ steps.get_version.outputs.version }}
+        body_path: changelog.md
+        draft: false
+        prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+
+  # 构建多平台二进制文件
+  build-binaries:
+    needs: create-release
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            arch: x64
+            platform: linux
+          - os: ubuntu-20.04
+            arch: arm64
+            platform: linux
+    
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up cross-compilation (ARM64)
+      if: matrix.arch == 'arm64'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libmysqlclient-dev \
+          libssl-dev
+
+    - name: Install ARM64 dependencies
+      if: matrix.arch == 'arm64'
+      run: |
+        sudo dpkg --add-architecture arm64
+        sudo apt-get update
+        sudo apt-get install -y \
+          libmysqlclient-dev:arm64 \
+          libssl-dev:arm64
+
+    - name: Build binary
+      run: |
+        mkdir -p build
+        cd build
+        
+        if [ "${{ matrix.arch }}" == "arm64" ]; then
+          cmake -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+                -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ \
+                -DCMAKE_SYSTEM_NAME=Linux \
+                -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+                ..
+        else
+          cmake ..
+        fi
+        
+        make server -j$(nproc)
+        
+        # 创建发布包
+        mkdir -p release
+        cp server release/
+        cp ../README.md release/
+        cp ../LICENSE release/
+        cp -r ../conf release/
+        cp -r ../root release/
+        
+        # 打包
+        tar -czf ${{ env.BINARY_NAME }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz -C release .
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ needs.create-release.outputs.upload_url }}
+        asset_path: build/${{ env.BINARY_NAME }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+        asset_name: ${{ env.BINARY_NAME }}-${{ matrix.platform }}-${{ matrix.arch }}.tar.gz
+        asset_content_type: application/gzip
+
+  # 构建和发布 Docker 镜像
+  build-docker:
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Build and push Docker images
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_USERNAME }}/${{ env.BINARY_NAME }}:${{ steps.get_version.outputs.version }}
+          ${{ secrets.DOCKER_USERNAME }}/${{ env.BINARY_NAME }}:latest
+          ghcr.io/${{ github.repository_owner }}/${{ env.BINARY_NAME }}:${{ steps.get_version.outputs.version }}
+          ghcr.io/${{ github.repository_owner }}/${{ env.BINARY_NAME }}:latest
+
+  # 发布后的通知和清理
+  post-release:
+    needs: [create-release, build-binaries, build-docker]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+    - name: Get version
+      id: get_version
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          VERSION="${{ github.event.inputs.version }}"
+        else
+          VERSION=${GITHUB_REF#refs/tags/}
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Notify success
+      if: needs.build-binaries.result == 'success' && needs.build-docker.result == 'success'
+      run: |
+        echo "🎉 Release ${{ steps.get_version.outputs.version }} published successfully!"
+        echo "- GitHub Release: https://github.com/${{ github.repository }}/releases/tag/${{ steps.get_version.outputs.version }}"
+        echo "- Docker Hub: https://hub.docker.com/r/${{ secrets.DOCKER_USERNAME }}/${{ env.BINARY_NAME }}"
+        echo "- GitHub Container Registry: https://ghcr.io/${{ github.repository_owner }}/${{ env.BINARY_NAME }}"
+
+    - name: Notify failure
+      if: needs.build-binaries.result == 'failure' || needs.build-docker.result == 'failure'
+      run: |
+        echo "❌ Release ${{ steps.get_version.outputs.version }} failed!"
+        exit 1
