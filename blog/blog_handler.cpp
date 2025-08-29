@@ -652,7 +652,7 @@ vector<Article> BlogHandler::get_articles_list(int page, int limit, int category
 }
 
 Article BlogHandler::get_article_by_id(int article_id) {
-    Article article;
+    Article article = {0}; // 初始化结构体
     if (!m_conn_pool) return article;
     
     MYSQL* mysql = nullptr;
@@ -764,7 +764,7 @@ vector<Category> BlogHandler::get_categories() {
 }
 
 Category BlogHandler::get_category_by_id(int category_id) {
-    Category category;
+    Category category = {0}; // 初始化结构体
     if (!m_conn_pool) return category;
     
     MYSQL* mysql = nullptr;
