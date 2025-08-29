@@ -59,6 +59,7 @@ jobs:
 
     - name: Build project
       run: |
+        rm -rf build
         mkdir -p build
         cd build
         cmake ..
