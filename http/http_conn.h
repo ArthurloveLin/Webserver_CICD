@@ -32,6 +32,9 @@
 #include <iomanip>
 #include <sstream>
 
+// 前置声明测试类以支持友元声明
+class HttpConnTestAccessor;
+
 // Session信息结构
 struct UserSession {
     string username;
@@ -59,6 +62,7 @@ struct UserSession {
 
 class http_conn
 {
+    friend class HttpConnTestAccessor;  // 测试访问器类，提供对私有成员的访问
 public:
     static const int FILENAME_LEN = 200;
     static const int READ_BUFFER_SIZE = 4096;

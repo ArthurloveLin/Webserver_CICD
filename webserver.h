@@ -19,8 +19,12 @@ const int MAX_FD = 65536;           //最大文件描述符
 const int MAX_EVENT_NUMBER = 10000; //最大事件数
 const int TIMESLOT = 5;             //最小超时单位
 
+// 前置声明测试访问器类
+class WebServerTestAccessor;
+
 class WebServer
 {
+    friend class WebServerTestAccessor;
 public:
     WebServer();
     ~WebServer();

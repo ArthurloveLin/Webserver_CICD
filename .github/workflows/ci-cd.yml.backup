@@ -1,0 +1,342 @@
+# =============================================================================
+# CI/CD Pipeline - 持续集成和持续部署流水线 [备份文件]
+# =============================================================================
+# 这个文件定义了 GitHub Actions 的工作流程，当代码发生变化时自动执行
+# 包括构建、测试、代码质量检查、Docker 镜像构建和部署等步骤
+
+name: CI/CD Pipeline
+
+# =============================================================================
+# 触发条件 - 什么情况下会运行这个流水线
+# =============================================================================
+on:
+  # 当推送代码到 main 或 develop 分支时触发
+  push:
+    branches: [ main, develop ]
+  
+  # 当创建针对 main 分支的 Pull Request 时触发
+  pull_request:
+    branches: [ main ]
+  
+  # 当发布新版本时触发（在 GitHub 上创建 Release）
+  release:
+    types: [ published ]
+
+# =============================================================================
+# 全局环境变量 - 整个流水线中都可以使用的变量
+# =============================================================================
+env:
+  DOCKER_IMAGE: tinywebserver    # Docker 镜像名称
+  DOCKER_TAG: latest            # Docker 镜像标签
+
+# =============================================================================
+# 作业定义 - 流水线包含的所有作业
+# =============================================================================
+jobs:
+  # ---------------------------------------------------------------------------
+  # 作业1: 构建和测试 - 编译项目并运行测试
+  # ---------------------------------------------------------------------------
+  build-and-test:
+    runs-on: ubuntu-latest  # 运行在最新的 Ubuntu 环境
+    
+    # 启动服务容器 - 为测试提供 MySQL 数据库
+    services:
+      mysql:
+        image: mysql:8.0  # 使用 MySQL 8.0 镜像
+        env:
+          MYSQL_ROOT_PASSWORD: webserver123  # MySQL root 密码
+          MYSQL_DATABASE: webserver          # 创建的数据库名
+        ports:
+          - 3306:3306  # 将容器的 3306 端口映射到主机的 3306 端口
+        # 健康检查 - 确保 MySQL 完全启动后再继续
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+    # 步骤1: 检出代码 - 下载仓库代码到运行环境
+    - name: Checkout code
+      uses: actions/checkout@v4  # 使用官方的代码检出 Action
+
+    # 步骤2: 缓存构建依赖 - 加速后续构建
+    - name: Cache build dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/vcpkg
+          ~/.cache/ccache
+          /tmp/build-cache
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/CMakeLists.txt', '**/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    # 步骤3: 缓存APT包 - 缓存已下载的包
+    - name: Cache APT packages
+      uses: actions/cache@v4
+      with:
+        path: /var/cache/apt/archives
+        key: ${{ runner.os }}-apt-${{ hashFiles('.github/workflows/ci-cd.yml') }}
+        restore-keys: |
+          ${{ runner.os }}-apt-
+
+    # 步骤4: 安装依赖库 - 安装编译所需的系统包
+    - name: Install dependencies
+      run: |
+        sudo apt-get update  # 更新包列表
+        sudo apt-get install -y \
+          build-essential \      # 编译工具链 (gcc, g++, make等)
+          cmake \               # CMake 构建系统
+          pkg-config \          # 包配置工具
+          libmysqlclient-dev \  # MySQL 客户端开发库
+          libssl-dev \          # OpenSSL 开发库
+          libgtest-dev \        # Google Test 测试框架
+          netcat-openbsd \      # 网络工具，用于连接测试
+          ccache                # 编译缓存工具
+
+    # 步骤5: 配置ccache - 设置编译缓存
+    - name: Setup ccache
+      run: |
+        # 配置ccache环境
+        export CCACHE_DIR=~/.cache/ccache
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        ccache --set-config=max_size=2G
+        ccache --zero-stats
+        
+    # 步骤6: 构建项目 - 使用 CMake 编译主程序
+    - name: Build project
+      run: |
+        # 使用单独的CI构建目录，避免与本地冲突
+        rm -rf build-ci
+        mkdir -p build-ci
+        cd build-ci
+        # 配置项目，启用ccache
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        cmake .. -DCMAKE_BUILD_TYPE=Release \
+                 -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        make server -j$(nproc)  # 并行编译服务器程序
+
+    # 步骤7: 构建测试 - 编译测试程序
+    - name: Build tests
+      run: |
+        cd build-ci
+        make tests -j$(nproc)  # 并行编译测试程序
+
+    # 步骤8: 等待 MySQL 启动 - 确保数据库服务可用
+    - name: Wait for MySQL
+      run: |
+        # 循环检查 MySQL 是否可连接
+        while ! mysqladmin ping -h"127.0.0.1" -P"3306" -u"root" -p"webserver123" --silent; do
+          echo "Waiting for MySQL..."
+          sleep 1
+        done
+
+    # 步骤9: 设置测试数据库 - 导入数据库架构和测试数据
+    - name: Setup test database
+      run: |
+        # 将 SQL 文件导入到测试数据库中
+        mysql -h 127.0.0.1 -P 3306 -u root -pwebserver123 webserver < database_migration_final.sql
+
+    # 步骤10: 运行测试 - 执行单元测试和集成测试
+    - name: Run tests
+      run: |
+        cd build-ci
+        ./tests  # 运行测试可执行文件
+      env:
+        # 为测试程序设置数据库连接环境变量
+        DB_HOST: 127.0.0.1
+        DB_USER: root
+        DB_PASSWORD: webserver123
+        DB_NAME: webserver
+
+    # 步骤11: 上传构建产物 - 保存编译生成的文件供后续作业使用
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts     # 产物名称
+        path: |
+          build-ci/server           # 主服务器程序
+          build-ci/tests           # 测试程序
+        retention-days: 1        # 保留1天
+
+  # ---------------------------------------------------------------------------
+  # 作业2: Docker 镜像构建和推送
+  # ---------------------------------------------------------------------------
+  docker-build-and-push:
+    needs: build-and-test  # 依赖于构建和测试作业完成
+    runs-on: ubuntu-latest
+    # 只在推送代码或发布版本时运行，不在 PR 时构建
+    if: github.event_name == 'push' || github.event_name == 'release'
+
+    steps:
+    # 步骤1: 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 步骤2: 设置 Docker Buildx - 支持多平台构建的 Docker 构建器
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # 步骤3: 缓存 Docker 层 - 加速 Docker 镜像构建
+    - name: Cache Docker layers
+      uses: actions/cache@v4
+      with:
+        path: /tmp/.buildx-cache  # 缓存路径
+        key: ${{ runner.os }}-buildx-${{ github.sha }}      # 基于 git commit SHA 的缓存键
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    # 步骤4: 登录 Docker Hub - 只在非 PR 时登录（PR 不需要推送镜像）
+    - name: Login to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}  # 从 GitHub Secrets 获取用户名
+        password: ${{ secrets.DOCKER_PASSWORD }}  # 从 GitHub Secrets 获取密码
+
+    # 步骤5: 提取元数据 - 为 Docker 镜像生成标签和标签
+    - name: Extract metadata
+      id: meta  # 设置步骤 ID，供后续步骤引用输出
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}
+        # 定义镜像标签规则
+        tags: |
+          type=ref,event=branch                                    # 分支名作为标签 (如: main, develop)
+          type=ref,event=pr                                        # PR 号作为标签 (如: pr-123)
+          type=sha,prefix={{branch}}-                              # 分支名+commit SHA (如: main-abc1234)
+          type=raw,value=latest,enable={{is_default_branch}}       # 默认分支标记为 latest
+          type=semver,pattern={{version}}                          # 语义化版本 (如: v1.2.3)
+          type=semver,pattern={{major}}.{{minor}}                  # 主版本.次版本 (如: v1.2)
+
+    # 步骤6: 构建并推送 Docker 镜像
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .                              # 构建上下文（当前目录）
+        platforms: linux/amd64,linux/arm64     # 构建多平台镜像
+        push: ${{ github.event_name != 'pull_request' }}  # 只在非 PR 时推送
+        tags: ${{ steps.meta.outputs.tags }}              # 使用上一步生成的标签
+        labels: ${{ steps.meta.outputs.labels }}          # 使用上一步生成的标签
+        # 缓存配置 - 从本地缓存读取和写入
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+    # 步骤7: 移动缓存 - 更新缓存目录
+    - name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  # ---------------------------------------------------------------------------
+  # 作业3: 部署 - 仅在发布新版本时执行
+  # ---------------------------------------------------------------------------
+  deploy:
+    needs: [build-and-test, docker-build-and-push]  # 依赖前两个作业完成
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'              # 仅在创建 Release 时运行
+    environment: production                          # 使用生产环境配置
+
+    steps:
+    # 步骤1: 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 步骤2: 部署到生产环境 - 这里是示例，实际需要根据部署方式修改
+    - name: Deploy to production
+      run: |
+        echo "This is where you would deploy to your production environment"
+        echo "For example, update your docker-compose.yml on your server"
+        echo "Release tag: ${{ github.event.release.tag_name }}"
+        # 实际部署命令示例:
+        # ssh user@server 'cd /app && docker-compose pull && docker-compose up -d'
+
+    # 步骤3: 创建部署状态 - 在 GitHub 中记录部署状态
+    - name: Create deployment status
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.repos.createDeploymentStatus({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            deployment_id: context.payload.deployment.id,
+            state: 'success',
+            environment_url: 'https://your-domain.com',  # 替换为实际的部署 URL
+            description: 'Deployment completed successfully'
+          });
+
+  # ---------------------------------------------------------------------------
+  # 作业4: 代码质量检查 - 独立运行的代码质量分析
+  # ---------------------------------------------------------------------------
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    # 步骤1: 检出代码
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 步骤2: 安装静态分析工具
+    - name: Install cppcheck
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cppcheck  # C++ 静态分析工具
+
+    # 步骤3: 运行静态分析 - 检查代码质量和潜在问题
+    - name: Run static analysis
+      run: |
+        # cppcheck 参数说明:
+        # --enable=warning,style: 启用警告和风格检查
+        # --error-exitcode=0: 即使有警告也不失败（设为1会在警告时失败）
+        # --suppress=xxx: 忽略特定类型的警告
+        # --std=c++11: 指定 C++11 标准
+        # --language=c++: 强制指定语言为 C++
+        cppcheck --enable=warning,style --error-exitcode=0 \
+          --suppress=missingIncludeSystem \        # 忽略缺失系统头文件
+          --suppress=unmatchedSuppression \        # 忽略未匹配的抑制
+          --suppress=uninitMemberVar \            # 忽略未初始化成员变量
+          --suppress=uninitMemberVarPrivate \     # 忽略未初始化私有成员变量
+          --suppress=noCopyConstructor \          # 忽略缺少拷贝构造函数
+          --suppress=noOperatorEq \               # 忽略缺少赋值操作符
+          --suppress=noExplicitConstructor \      # 忽略非显式构造函数
+          --suppress=cstyleCast \                 # 忽略 C 风格类型转换
+          --suppress=shadowVariable \             # 忽略变量遮蔽
+          --suppress=shadowFunction \             # 忽略函数遮蔽
+          --suppress=passedByValue \              # 忽略按值传递大对象
+          --suppress=unusedFunction \             # 忽略未使用函数
+          --suppress=unusedPrivateFunction \      # 忽略未使用私有函数
+          --suppress=unusedVariable \             # 忽略未使用变量
+          --suppress=unreadVariable \             # 忽略未读取变量
+          --suppress=constVariable \              # 忽略可以是 const 的变量
+          --suppress=constVariablePointer \       # 忽略可以是 const 的指针
+          --suppress=variableScope \              # 忽略变量作用域问题
+          --suppress=syntaxError \                # 忽略语法错误（通常是误报）
+          --suppress=uninitvar \                  # 忽略未初始化变量
+          --suppress=uninitStructMember \         # 忽略未初始化结构体成员
+          --suppress=useInitializationList \      # 忽略应使用初始化列表
+          --suppress=uselessCallsSubstr \         # 忽略无用的 substr 调用
+          --suppress=nullPointerRedundantCheck \  # 忽略冗余的空指针检查
+          --suppress=checkersReport \             # 忽略检查器报告
+          --inline-suppr \                        # 允许内联抑制
+          --std=c++11 \                          # C++11 标准
+          --language=c++ \                       # 强制 C++ 语言
+          *.cpp *.h \                            # 检查根目录的源文件
+          http/*.cpp http/*.h \                   # HTTP 模块
+          log/*.cpp log/*.h \                     # 日志模块
+          CGImysql/*.cpp CGImysql/*.h \          # MySQL 连接模块
+          blog/*.cpp blog/*.h \                   # 博客模块
+          timer/*.cpp timer/*.h || echo "Static analysis completed with warnings"
+
+
+
+# =============================================================================
+# 流水线执行流程总结:
+# 1. 触发: 代码推送、PR创建或Release发布
+# 2. 并行执行: build-and-test 和 code-quality
+# 3. 顺序执行: docker-build-and-push (依赖构建完成)
+# 4. 最后执行: deploy (仅Release时，依赖前面所有作业完成)
+# =============================================================================

@@ -64,11 +64,15 @@ target_link_libraries(server
 target_compile_options(server PRIVATE ${MYSQL_CFLAGS_OTHER})
 target_link_directories(server PRIVATE ${MYSQL_LIBRARY_DIRS})
 
-# GTest 支持 (可选)
+# GTest 和 GMock 支持 (可选)
 find_package(GTest QUIET)
-if(GTest_FOUND)
+find_package(GMock QUIET)
+if(GTest_FOUND AND GMock_FOUND)
     enable_testing()
-    message(STATUS "GTest found, enabling tests")
+    message(STATUS "GTest and GMock found, enabling tests")
+elseif(GTest_FOUND)
+    enable_testing()
+    message(STATUS "GTest found, enabling tests (GMock not available)")
 else()
     message(WARNING "GTest not found, skipping tests")
 endif()
@@ -94,14 +98,27 @@ if(GTest_FOUND)
     )
 
     # 链接测试库
-    target_link_libraries(tests
-        GTest::gtest
-        GTest::gtest_main
-        Threads::Threads
-        ${MYSQL_LIBRARIES}
-        OpenSSL::SSL
-        OpenSSL::Crypto
-    )
+    if(GMock_FOUND)
+        target_link_libraries(tests
+            GTest::gtest
+            GTest::gtest_main
+            GTest::gmock
+            GTest::gmock_main
+            Threads::Threads
+            ${MYSQL_LIBRARIES}
+            OpenSSL::SSL
+            OpenSSL::Crypto
+        )
+    else()
+        target_link_libraries(tests
+            GTest::gtest
+            GTest::gtest_main
+            Threads::Threads
+            ${MYSQL_LIBRARIES}
+            OpenSSL::SSL
+            OpenSSL::Crypto
+        )
+    endif()
 
     # 设置测试编译选项
     target_compile_options(tests PRIVATE ${MYSQL_CFLAGS_OTHER})

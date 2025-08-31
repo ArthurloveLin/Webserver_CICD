@@ -12,7 +12,7 @@ CREATE DATABASE IF NOT EXISTS `webserver` DEFAULT CHARACTER SET utf8mb4 COLLATE 
 USE `webserver`;
 
 -- 2. 创建表结构
--- -----------------------------------------------------------------
+-------------------------------------------------------------------
 
 -- 用户表 (user)
 DROP TABLE IF EXISTS `user`;

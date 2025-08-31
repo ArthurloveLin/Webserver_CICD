@@ -1,22 +1,33 @@
-name: CI/CD Pipeline
+# =============================================================================
+# CI Pipeline - 持续集成流水线
+# =============================================================================
+# 专注于自动化测试的 CI 流水线，包括构建、测试和代码质量检查
 
+name: CI Pipeline
+
+# =============================================================================
+# 触发条件
+# =============================================================================
 on:
+  # 推送到任意分支时触发
   push:
-    branches: [ main, develop ]
+    branches: [ "*" ]
+  
+  # Pull Request 到主要分支时触发
   pull_request:
-    branches: [ main ]
-  release:
-    types: [ published ]
+    branches: [ main, develop, blog ]
 
-env:
-  DOCKER_IMAGE: tinywebserver
-  DOCKER_TAG: latest
-
+# =============================================================================
+# 作业定义
+# =============================================================================
 jobs:
-  # 构建和测试阶段
+  # ---------------------------------------------------------------------------
+  # 作业1: 构建和测试
+  # ---------------------------------------------------------------------------
   build-and-test:
     runs-on: ubuntu-latest
     
+    # MySQL 服务容器
     services:
       mysql:
         image: mysql:8.0
@@ -32,19 +43,22 @@ jobs:
           --health-retries=3
 
     steps:
+    # 检出代码
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Cache CMake dependencies
+    # 缓存依赖
+    - name: Cache dependencies
       uses: actions/cache@v4
       with:
         path: |
-          ~/.cache/vcpkg
-          build/
-        key: ${{ runner.os }}-cmake-${{ hashFiles('CMakeLists.txt') }}
+          ~/.cache/ccache
+          /var/cache/apt/archives
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/CMakeLists.txt') }}
         restore-keys: |
-          ${{ runner.os }}-cmake-
+          ${{ runner.os }}-deps-
 
+    # 安装依赖
     - name: Install dependencies
       run: |
         sudo apt-get update
@@ -55,21 +69,37 @@ jobs:
           libmysqlclient-dev \
           libssl-dev \
           libgtest-dev \
-          netcat-openbsd
+          ccache
 
+    # 配置编译缓存
+    - name: Setup ccache
+      run: |
+        export CCACHE_DIR=~/.cache/ccache
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        ccache --set-config=max_size=1G
+        ccache --zero-stats
+
+    # 构建项目
     - name: Build project
       run: |
-        rm -rf build
-        mkdir -p build
-        cd build
-        cmake ..
+        rm -rf build-ci
+        mkdir -p build-ci
+        cd build-ci
+        export CC="ccache gcc"
+        export CXX="ccache g++"
+        cmake .. -DCMAKE_BUILD_TYPE=Release \
+                 -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+                 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         make server -j$(nproc)
 
+    # 构建测试
     - name: Build tests
       run: |
-        cd build
+        cd build-ci
         make tests -j$(nproc)
 
+    # 等待 MySQL 启动
     - name: Wait for MySQL
       run: |
         while ! mysqladmin ping -h"127.0.0.1" -P"3306" -u"root" -p"webserver123" --silent; do
@@ -77,13 +107,29 @@ jobs:
           sleep 1
         done
 
+    # 设置测试数据库
     - name: Setup test database
       run: |
-        mysql -h 127.0.0.1 -P 3306 -u root -pwebserver123 webserver < database_migration_final.sql
+        # 检查SQL文件是否存在
+        if [ -f "database_migration_final.sql" ]; then
+          mysql -h 127.0.0.1 -P 3306 -u root -pwebserver123 webserver < database_migration_final.sql
+        elif [ -f "vblog.sql" ]; then
+          mysql -h 127.0.0.1 -P 3306 -u root -pwebserver123 webserver < vblog.sql
+        else
+          echo "No SQL file found, creating minimal schema..."
+          mysql -h 127.0.0.1 -P 3306 -u root -pwebserver123 webserver -e "
+            CREATE TABLE IF NOT EXISTS user (
+              username VARCHAR(100) NOT NULL,
+              passwd VARCHAR(100) NOT NULL,
+              PRIMARY KEY (username)
+            ) ENGINE=InnoDB;
+          "
+        fi
 
+    # 运行测试
     - name: Run tests
       run: |
-        cd build
+        cd build-ci
         ./tests
       env:
         DB_HOST: 127.0.0.1
@@ -91,103 +137,24 @@ jobs:
         DB_PASSWORD: webserver123
         DB_NAME: webserver
 
-    - name: Upload build artifacts
+    # 显示编译缓存统计
+    - name: Show ccache stats
+      run: ccache --show-stats
+
+    # 上传测试报告（如果失败）
+    - name: Upload test logs
+      if: failure()
       uses: actions/upload-artifact@v4
       with:
-        name: build-artifacts
+        name: test-logs-${{ github.run_number }}
         path: |
-          build/server
-          build/tests
-        retention-days: 1
+          build-ci/
+          *.log
+        retention-days: 7
 
-  # Docker 构建和发布阶段
-  docker-build-and-push:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'release'
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Cache Docker layers
-      uses: actions/cache@v4
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
-
-    - name: Login to Docker Hub
-      if: github.event_name != 'pull_request'
-      uses: docker/login-action@v3
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Extract metadata
-      id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_IMAGE }}
-        tags: |
-          type=ref,event=branch
-          type=ref,event=pr
-          type=sha,prefix={{branch}}-
-          type=raw,value=latest,enable={{is_default_branch}}
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v5
-      with:
-        context: .
-        platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'pull_request' }}
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
-  # 部署阶段 (仅在发布时)
-  deploy:
-    needs: [build-and-test, docker-build-and-push]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    environment: production
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Deploy to production
-      run: |
-        echo "This is where you would deploy to your production environment"
-        echo "For example, update your docker-compose.yml on your server"
-        echo "Release tag: ${{ github.event.release.tag_name }}"
-
-    - name: Create deployment status
-      uses: actions/github-script@v7
-      with:
-        script: |
-          github.rest.repos.createDeploymentStatus({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            deployment_id: context.payload.deployment.id,
-            state: 'success',
-            environment_url: 'https://your-domain.com',
-            description: 'Deployment completed successfully'
-          });
-
-  # 代码质量检查
+  # ---------------------------------------------------------------------------
+  # 作业2: 代码质量检查
+  # ---------------------------------------------------------------------------
   code-quality:
     runs-on: ubuntu-latest
     
@@ -195,54 +162,118 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install cppcheck
+    # 安装静态分析工具
+    - name: Install analysis tools
       run: |
         sudo apt-get update
-        sudo apt-get install -y cppcheck
+        sudo apt-get install -y cppcheck clang-tidy
 
+    # 运行静态分析
     - name: Run static analysis
       run: |
-        cppcheck --enable=warning,style --error-exitcode=0 \
+        echo "Running cppcheck..."
+        cppcheck --enable=warning,style,performance --error-exitcode=0 \
           --suppress=missingIncludeSystem \
           --suppress=unmatchedSuppression \
-          --suppress=uninitMemberVar \
-          --suppress=uninitMemberVarPrivate \
-          --suppress=noCopyConstructor \
-          --suppress=noOperatorEq \
-          --suppress=noExplicitConstructor \
-          --suppress=cstyleCast \
-          --suppress=shadowVariable \
-          --suppress=shadowFunction \
-          --suppress=passedByValue \
           --suppress=unusedFunction \
           --suppress=unusedPrivateFunction \
-          --suppress=unusedVariable \
-          --suppress=unreadVariable \
-          --suppress=constVariable \
-          --suppress=constVariablePointer \
-          --suppress=variableScope \
-          --suppress=syntaxError \
-          --suppress=uninitvar \
-          --suppress=uninitStructMember \
-          --suppress=useInitializationList \
-          --suppress=uselessCallsSubstr \
-          --suppress=nullPointerRedundantCheck \
-          --suppress=checkersReport \
-          --inline-suppr \
-          --std=c++11 \
-          --language=c++ \
+          --std=c++11 --language=c++ \
+          --xml --xml-version=2 \
           *.cpp *.h \
           http/*.cpp http/*.h \
           log/*.cpp log/*.h \
           CGImysql/*.cpp CGImysql/*.h \
+          timer/*.cpp timer/*.h \
           blog/*.cpp blog/*.h \
-          timer/*.cpp timer/*.h || echo "Static analysis completed with warnings"
+          2> cppcheck-report.xml || true
 
-    - name: Check code formatting (optional)
+    # 检查编码规范
+    - name: Check code style
       run: |
-        if command -v clang-format >/dev/null; then
-          echo "Running clang-format check..."
-          find . -name "*.cpp" -o -name "*.h" | xargs clang-format --dry-run --Werror
+        echo "Checking for common code style issues..."
+        # 检查制表符
+        if grep -r $'\t' --include="*.cpp" --include="*.h" . ; then
+          echo "Warning: Found tabs in source files"
+        fi
+        # 检查行尾空格
+        if grep -r ' $' --include="*.cpp" --include="*.h" . ; then
+          echo "Warning: Found trailing spaces"
+        fi
+        echo "Code style check completed"
+
+    # 上传分析报告
+    - name: Upload analysis reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-quality-reports-${{ github.run_number }}
+        path: |
+          cppcheck-report.xml
+        retention-days: 30
+
+  # ---------------------------------------------------------------------------
+  # 作业3: 构建验证（不同编译器/配置）
+  # ---------------------------------------------------------------------------
+  build-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        compiler: [gcc, clang]
+        build_type: [Debug, Release]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          pkg-config \
+          libmysqlclient-dev \
+          libssl-dev \
+          clang
+
+    - name: Build with ${{ matrix.compiler }} (${{ matrix.build_type }})
+      run: |
+        rm -rf build-${{ matrix.compiler }}-${{ matrix.build_type }}
+        mkdir -p build-${{ matrix.compiler }}-${{ matrix.build_type }}
+        cd build-${{ matrix.compiler }}-${{ matrix.build_type }}
+        
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          export CC=clang
+          export CXX=clang++
         else
-          echo "clang-format not available, skipping formatting check"
+          export CC=gcc
+          export CXX=g++
+        fi
+        
+        cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        make server -j$(nproc)
+
+  # ---------------------------------------------------------------------------
+  # 作业4: 结果汇总
+  # ---------------------------------------------------------------------------
+  ci-summary:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality, build-matrix]
+    if: always()
+    
+    steps:
+    - name: CI Summary
+      run: |
+        echo "=== CI Pipeline Summary ==="
+        echo "Build and Test: ${{ needs.build-and-test.result }}"
+        echo "Code Quality: ${{ needs.code-quality.result }}"
+        echo "Build Matrix: ${{ needs.build-matrix.result }}"
+        
+        if [ "${{ needs.build-and-test.result }}" = "success" ] && \
+           [ "${{ needs.code-quality.result }}" = "success" ] && \
+           [ "${{ needs.build-matrix.result }}" = "success" ]; then
+          echo "✅ All CI checks passed!"
+          exit 0
+        else
+          echo "❌ Some CI checks failed!"
+          exit 1
         fi

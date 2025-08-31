@@ -1,103 +1,169 @@
+# =============================================================================
+# Docker Image Publish - Docker 镜像发布流水线
+# =============================================================================
+# 这个工作流专门用于构建和发布 Docker 镜像到多个容器注册表
+# 当推送版本标签或手动触发时执行，包含安全扫描和软件物料清单生成
+
 name: Docker Image Publish
 
+# =============================================================================
+# 触发条件 - 何时运行这个流水线
+# =============================================================================
 on:
+  # 当推送版本标签时触发 (如: git tag v1.0.0 && git push origin v1.0.0)
   push:
     tags:
-      - 'v*'  # 当推送 v1.0.0, v2.1.0 等标签时触发
-  workflow_dispatch:  # 允许手动触发
+      - 'v*'  # 匹配所有以 v 开头的标签: v1.0.0, v2.1.0, v1.0.0-beta 等
+  
+  # 允许在 GitHub 界面手动触发此工作流
+  workflow_dispatch:  # 在 Actions 页面会出现 "Run workflow" 按钮
 
+# =============================================================================
+# 全局环境变量
+# =============================================================================
 env:
-  REGISTRY: docker.io
-  IMAGE_NAME: tinywebserver
+  REGISTRY: docker.io              # Docker Hub 注册表地址
+  IMAGE_NAME: tinywebserver        # Docker 镜像名称
 
+# =============================================================================
+# 作业定义
+# =============================================================================
 jobs:
+  # ---------------------------------------------------------------------------
+  # 构建并推送 Docker 镜像
+  # ---------------------------------------------------------------------------
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 运行环境
+    
+    # 权限设置 - GitHub Actions 需要的权限
     permissions:
-      contents: read
-      packages: write
+      contents: read    # 读取仓库内容
+      packages: write   # 写入 GitHub Container Registry
 
     steps:
+    # 步骤1: 检出代码 - 获取仓库的完整代码
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4  # 下载代码到运行环境
 
+    # 步骤2: 设置 QEMU - 支持多架构模拟
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
+      # QEMU 是一个开源的处理器模拟器，允许在 x86 机器上构建 ARM64 镜像
+      # 这样可以构建支持多种 CPU 架构的 Docker 镜像
 
+    # 步骤3: 设置 Docker Buildx - 增强的 Docker 构建器
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
+      # Buildx 是 Docker 的高级构建功能，支持:
+      # - 多平台构建 (linux/amd64, linux/arm64 等)
+      # - 高级缓存功能
+      # - 构建时的 secrets 和 SSH 支持
 
+    # 步骤4: 登录到 Docker Hub
     - name: Login to Docker Hub
       uses: docker/login-action@v3
       with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        registry: ${{ env.REGISTRY }}           # docker.io
+        username: ${{ secrets.DOCKER_USERNAME }}  # 从 GitHub Secrets 获取用户名
+        password: ${{ secrets.DOCKER_PASSWORD }}  # 从 GitHub Secrets 获取密码/Token
 
+    # 步骤5: 登录到 GitHub Container Registry (ghcr.io)
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
       with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        registry: ghcr.io                    # GitHub 的容器注册表
+        username: ${{ github.actor }}       # 当前触发 workflow 的用户
+        password: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动提供的 token
 
+    # 步骤6: 提取镜像元数据 - 生成标签和标签
     - name: Extract metadata
-      id: meta
+      id: meta  # 设置步骤 ID，后续步骤可以引用其输出
       uses: docker/metadata-action@v5
       with:
+        # 定义要推送到的镜像仓库
         images: |
-          ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
-          ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}           # Docker Hub: username/tinywebserver
+          ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}   # GitHub: ghcr.io/owner/tinywebserver
+        
+        # 定义标签生成规则
         tags: |
-          type=ref,event=tag
-          type=semver,pattern={{version}}
-          type=semver,pattern={{major}}.{{minor}}
-          type=semver,pattern={{major}}
-          type=raw,value=latest,enable={{is_default_branch}}
+          type=ref,event=tag                           # 直接使用 Git 标签 (v1.0.0 -> v1.0.0)
+          type=semver,pattern={{version}}              # 语义化版本 (v1.2.3 -> 1.2.3)
+          type=semver,pattern={{major}}.{{minor}}      # 主版本.次版本 (v1.2.3 -> 1.2)
+          type=semver,pattern={{major}}                # 主版本 (v1.2.3 -> 1)
+          type=raw,value=latest,enable={{is_default_branch}}  # 默认分支标记为 latest
 
+    # 步骤7: 构建并推送 Docker 镜像
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: .
-        file: ./Dockerfile
-        platforms: linux/amd64,linux/arm64
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        context: .                           # 构建上下文 - 当前目录
+        file: ./Dockerfile                   # Dockerfile 路径
+        platforms: linux/amd64,linux/arm64  # 构建多平台镜像 (Intel/AMD 和 ARM)
+        push: true                          # 构建完成后推送到注册表
+        tags: ${{ steps.meta.outputs.tags }}      # 使用上一步生成的标签
+        labels: ${{ steps.meta.outputs.labels }}  # 使用上一步生成的标签
+        # 缓存配置 - 使用 GitHub Actions 缓存
+        cache-from: type=gha                # 从 GitHub Actions 缓存读取
+        cache-to: type=gha,mode=max        # 写入 GitHub Actions 缓存 (最大模式)
 
+    # 步骤8: 生成软件物料清单 (SBOM)
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
       with:
+        # 为构建的镜像生成 SBOM
         image: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-        format: spdx-json
-        output-file: sbom.spdx.json
+        format: spdx-json              # SPDX JSON 格式 (行业标准)
+        output-file: sbom.spdx.json    # 输出文件名
+      # SBOM (Software Bill of Materials) 记录了软件中包含的所有组件
+      # 用于供应链安全和合规性要求
 
+    # 步骤9: 上传 SBOM 文件
     - name: Upload SBOM
       uses: actions/upload-artifact@v4
       with:
-        name: sbom
-        path: sbom.spdx.json
+        name: sbom                # 产物名称
+        path: sbom.spdx.json     # 要上传的文件
+      # 将 SBOM 文件保存为 GitHub Actions 产物，可以下载查看
 
+    # 步骤10: 运行 Trivy 漏洞扫描
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master
       with:
+        # 扫描刚刚构建的 Docker 镜像
         image-ref: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
-        format: sarif
-        output: trivy-results.sarif
+        format: sarif              # SARIF 格式 (Static Analysis Results Interchange Format)
+        output: trivy-results.sarif  # 输出文件名
+      # Trivy 是一个开源的容器漏洞扫描器，检查:
+      # - 操作系统包漏洞
+      # - 应用程序依赖漏洞
+      # - 配置问题
 
+    # 步骤11: 上传漏洞扫描结果
     - name: Upload Trivy scan results
       uses: github/codeql-action/upload-sarif@v3
-      if: always()
+      if: always()  # 即使前面的步骤失败也执行
       with:
         sarif_file: trivy-results.sarif
+      # 将扫描结果上传到 GitHub Security 页面，可以看到安全警告
 
+    # 步骤12: 更新 Docker Hub 描述
     - name: Update Docker Hub Description
       uses: peter-evans/dockerhub-description@v4
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-        repository: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}
-        readme-filepath: ./README.Docker.md
-        short-description: "高性能的轻量级C++ Web服务器"
+        username: ${{ secrets.DOCKER_USERNAME }}    # Docker Hub 用户名
+        password: ${{ secrets.DOCKER_PASSWORD }}    # Docker Hub 密码
+        repository: ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}  # 仓库名称
+        readme-filepath: ./README.Docker.md         # 用作描述的 README 文件
+        short-description: "高性能的轻量级C++ Web服务器"  # 简短描述
+      # 自动更新 Docker Hub 上的仓库描述，让用户了解镜像用途
+
+# =============================================================================
+# 使用示例:
+# 1. 创建并推送标签: git tag v1.0.0 && git push origin v1.0.0
+# 2. 工作流会自动构建多平台镜像并推送到:
+#    - Docker Hub: username/tinywebserver:v1.0.0, username/tinywebserver:1.0.0, username/tinywebserver:1.0, username/tinywebserver:1
+#    - GitHub: ghcr.io/owner/tinywebserver:v1.0.0 (同样的标签)
+# 3. 生成 SBOM 和安全扫描报告
+# 4. 更新 Docker Hub 页面描述
+# =============================================================================
