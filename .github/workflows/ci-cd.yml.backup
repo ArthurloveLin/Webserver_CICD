@@ -7,15 +7,40 @@
 name: CI/CD Pipeline
 
 # =============================================================================
-# 触发条件
+# 触发条件 - 更精细的控制策略
 # =============================================================================
 on:
+  # 推送到主要分支时触发
   push:
     branches: [ main, develop ]
+    # 可选：只在特定路径变化时触发
+    # paths:
+    #   - '**.cpp'
+    #   - '**.h' 
+    #   - '**.cmake'
+    #   - 'CMakeLists.txt'
+    #   - 'Dockerfile'
+  
+  # PR到main分支时触发（只运行测试，不构建镜像）
   pull_request:
     branches: [ main ]
+    # 可选：忽略文档变更的PR
+    # paths-ignore:
+    #   - '**.md'
+    #   - 'docs/**'
+  
+  # 发布新版本时触发（构建带版本标签的镜像）
   release:
     types: [ published ]
+  
+  # 手动触发（可用于紧急构建）
+  workflow_dispatch:
+    inputs:
+      force_docker_build:
+        description: 'Force Docker build even for non-main branches'
+        required: false
+        default: false
+        type: boolean
 
 # =============================================================================
 # 全局环境变量
@@ -279,8 +304,15 @@ jobs:
   docker-build-and-push:
     needs: [unit-test, integration-test]
     runs-on: ubuntu-latest
-    # 只在推送代码或发布版本时运行，PR时只构建不推送
-    if: github.event_name == 'push' || github.event_name == 'release'
+    # 更合理的触发条件:
+    # 1. 只在推送到main分支时构建镜像（生产就绪版本）
+    # 2. 发布Release时构建带版本标签的镜像  
+    # 3. develop分支可选择性构建（用于预发布测试）
+    # 4. 支持手动强制构建
+    if: |
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) ||
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.force_docker_build == 'true')
 
     steps:
     - name: Checkout code
@@ -466,9 +498,17 @@ jobs:
 #    - deploy: 仅在Release时执行，依赖前面所有作业（约2-5分钟）
 # 
 # 4. 总耗时估算:
-#    - PR: 约10-15分钟（unit-test + integration-test + code-quality）
-#    - Push: 约20-30分钟（包含Docker构建）
+#    - 功能分支推送: 约10-15分钟（仅测试，不构建Docker）
+#    - PR: 约10-15分钟（仅测试验证）
+#    - main/develop推送: 约20-30分钟（包含Docker构建）
 #    - Release: 约25-35分钟（包含部署）
+# 
+# 5. 触发策略:
+#    - 功能分支: 仅运行单元测试和集成测试
+#    - PR: 运行完整测试套件，验证可合并性
+#    - main分支: 测试 + 构建生产镜像
+#    - develop分支: 测试 + 构建预发布镜像
+#    - Release: 完整流程，包含部署
 # 
 # 5. 失败策略:
 #    - unit-test失败 → 整个流水线停止
